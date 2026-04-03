@@ -91,11 +91,243 @@ function getSubclassName(code) {
   return SUBCLASS_NAMES[code] || ''
 }
 
-function StatusBadge({ code, data }) {
+// Match a single IPC code: subclass (H01L) or group (H01L 21/677)
+const SINGLE_CODE_RE = /^[A-H]\d{2}[A-Z](?:\s+\d+\/\d+)?$/
+
+// Match a code followed by a range: "H01L 21/00 - 21/06" or "H01L 21/00 -"
+const RANGE_RE = /^([A-H]\d{2}[A-Z]\s+\d+\/\d+)\s*(-\s*\d*\/?\.?\d*)$/
+
+// Expand a range like "B81C 1/00 - 5/00" into individual codes using ipcGroups
+function expandRange(startCode, endPart, ipcGroups) {
+  if (!ipcGroups || !endPart) return null
+  const sub = startCode.slice(0, 4)
+  const groups = ipcGroups[sub]
+  if (!groups) return null
+
+  // Parse start: "B81C 1/00" → main=1, sub=00
+  const startMatch = startCode.match(/([A-H]\d{2}[A-Z])\s+(\d+)\/(\d+)/)
+  if (!startMatch) return null
+  const startMain = parseInt(startMatch[2])
+  const startSub = parseInt(startMatch[3])
+
+  // Parse end: "- 5/00" or "- 21/06"
+  const endClean = endPart.replace(/^-\s*/, '').trim()
+  if (!endClean) return null
+  let endMain, endSub
+  if (endClean.includes('/')) {
+    const parts = endClean.split('/')
+    endMain = parseInt(parts[0])
+    endSub = parseInt(parts[1])
+  } else {
+    // Just a subgroup like "21/06" → same main group
+    endMain = startMain
+    endSub = parseInt(endClean)
+  }
+
+  // Filter groups in range
+  const expanded = groups.filter(g => {
+    const m = g.match(/[A-H]\d{2}[A-Z]\s+(\d+)\/(\d+)/)
+    if (!m) return false
+    const gMain = parseInt(m[1])
+    const gSub = parseInt(m[2])
+    // Compare: (main, sub) between start and end
+    if (gMain < startMain || gMain > endMain) return false
+    if (gMain === startMain && gSub < startSub) return false
+    if (gMain === endMain && gSub > endSub) return false
+    return true
+  })
+
+  return expanded.length > 0 ? expanded : null
+}
+
+// Parse a dst string into segments, marking which are clickable
+// Handles: single codes, comma-separated, ranges (code - code), space-separated codes
+function parseDst(dst) {
+  // First split by comma
+  const parts = dst.split(',')
+  const segments = []
+  parts.forEach((part, i) => {
+    if (i > 0) segments.push({ text: ', ', link: false })
+    const trimmed = part.trim()
+
+    if (SINGLE_CODE_RE.test(trimmed)) {
+      // Exact single code — fully clickable
+      segments.push({ text: trimmed, link: true })
+    } else {
+      // Try range pattern: "H01L 21/00 - 21/06"
+      const rangeMatch = trimmed.match(RANGE_RE)
+      if (rangeMatch) {
+        segments.push({ text: rangeMatch[1], link: true })
+        segments.push({ text: ' ' + rangeMatch[2], link: false })
+      } else {
+        // Try to find embedded IPC codes (space-separated or other)
+        const codePattern = /[A-H]\d{2}[A-Z](?:\s+\d+\/\d+)?/g
+        let lastIdx = 0
+        let match
+        let found = false
+        while ((match = codePattern.exec(trimmed)) !== null) {
+          found = true
+          if (match.index > lastIdx) {
+            segments.push({ text: trimmed.slice(lastIdx, match.index), link: false })
+          }
+          segments.push({ text: match[0], link: true })
+          lastIdx = match.index + match[0].length
+        }
+        if (found && lastIdx < trimmed.length) {
+          segments.push({ text: trimmed.slice(lastIdx), link: false })
+        }
+        if (!found) {
+          segments.push({ text: trimmed, link: false })
+        }
+      }
+    }
+  })
+  return segments
+}
+
+function CodeLink({ text, onSearch }) {
+  return (
+    <span className="code-link" onClick={() => onSearch(text)}>
+      {text}
+    </span>
+  )
+}
+
+function DstCell({ dst, onSearch, ipcGroups }) {
+  const segments = parseDst(dst)
+  const result = []
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i]
+    if (seg.link) {
+      // Check if next segment is a range suffix like " - 5/00"
+      const next = segments[i + 1]
+      if (next && !next.link && next.text.trim().startsWith('-') && ipcGroups) {
+        const expanded = expandRange(seg.text, next.text.trim(), ipcGroups)
+        if (expanded && expanded.length > 1) {
+          // Replace range with expanded individual codes
+          result.push(
+            <span key={i} className="expanded-range">
+              {expanded.map((code, j) => (
+                <span key={j}>
+                  {j > 0 && ', '}
+                  <CodeLink text={code} onSearch={onSearch} />
+                </span>
+              ))}
+            </span>
+          )
+          i++ // skip the range suffix
+          continue
+        }
+      }
+      result.push(<CodeLink key={i} text={seg.text} onSearch={onSearch} />)
+    } else {
+      result.push(<span key={i}>{seg.text}</span>)
+    }
+  }
+  return <>{result}</>
+}
+
+// Extract all individual IPC codes from a string (handles ranges, commas, etc.)
+// e.g. "H04N 5/30 - 5/31" → ["H04N 5/30", "H04N 5/31"]
+function extractCodes(str) {
+  const codes = []
+  let lastSub = null
+  // Split by comma first, then handle each part
+  str.split(',').forEach(part => {
+    const trimmed = part.trim()
+    // Full code: "H04N 5/30"
+    const fullMatch = trimmed.match(/([A-H]\d{2}[A-Z])\s+(\d+\/\d+)/)
+    if (fullMatch) {
+      lastSub = fullMatch[1]
+      codes.push(`${fullMatch[1]} ${fullMatch[2]}`)
+      // Check for range suffix: "H04N 5/30 - 5/31"
+      const rangeMatch = trimmed.match(/([A-H]\d{2}[A-Z])\s+(\d+\/\d+)\s*-\s*(\d+\/\d+)/)
+      if (rangeMatch) {
+        codes.push(`${rangeMatch[1]} ${rangeMatch[3]}`)
+      }
+    } else if (lastSub) {
+      // Bare group number with range: "5/31" or "- 5/31"
+      const bareMatch = trimmed.match(/(?:-\s*)?(\d+\/\d+)/)
+      if (bareMatch) {
+        codes.push(`${lastSub} ${bareMatch[1]}`)
+      }
+    }
+  })
+  return codes
+}
+
+// Build an index: group code → [{ type: 'donated'|'received', subclass, record }]
+function buildGroupIndex(subclass_index) {
+  const idx = {}
+  const SINGLE_RE = /^[A-H]\d{2}[A-Z]\s+\d+\/\d+$/
+  Object.entries(subclass_index).forEach(([subclass, entry]) => {
+    ;(entry.donated || []).forEach(rec => {
+      const key = (rec.src_group || '').trim()
+      if (!key) return
+      // Index the full src_group string (may be a range)
+      if (!idx[key]) idx[key] = []
+      idx[key].push({ type: 'donated', subclass, record: rec })
+      // Also index individual codes extracted from src_group (for ranges like "H04N 5/30 - 5/31")
+      extractCodes(key).forEach(code => {
+        if (code !== key) {
+          if (!idx[code]) idx[code] = []
+          idx[code].push({ type: 'donated', subclass, record: rec })
+        }
+      })
+    })
+    ;(entry.received || []).forEach(rec => {
+      // Index by dst: extract individual codes from dst string
+      const dst = (rec.dst || '').trim()
+      // Only index single exact codes (not ranges)
+      dst.split(',').forEach(part => {
+        const t = part.trim().split(' - ')[0].trim()
+        if (SINGLE_RE.test(t)) {
+          if (!idx[t]) idx[t] = []
+          idx[t].push({ type: 'received', subclass, record: rec })
+        }
+      })
+      // Also index the from field (may be a range)
+      const from = (rec.from || '').trim()
+      extractCodes(from).forEach(code => {
+        if (!idx[code]) idx[code] = []
+        idx[code].push({ type: 'from', subclass, record: rec })
+      })
+      // Also index the full from string if it's a range
+      if (from && !SINGLE_RE.test(from)) {
+        if (!idx[from]) idx[from] = []
+        idx[from].push({ type: 'from', subclass, record: rec })
+      }
+    })
+  })
+  return idx
+}
+
+// Normalize input for group-level queries: insert space after 4th char if missing
+// e.g. "H01L21/677" → "H01L 21/677"
+function normalizeGroupQuery(q) {
+  if (q.length > 4 && q[4] !== ' ') {
+    return q.slice(0, 4) + ' ' + q.slice(4)
+  }
+  return q
+}
+
+// Detect if a query is group-level (>4 chars starting with valid subclass pattern)
+function isGroupQuery(q) {
+  return q.length > 4 && /^[A-H]\d{2}[A-Z]/.test(q)
+}
+
+function StatusBadge({ code, data, onSearch }) {
   const intro = data.introduced_in[code]
   const depr = data.deprecated_to[code]
+  const deprAt = data.deprecated_at && data.deprecated_at[code]
   if (depr) {
-    return <span className="badge badge-deprecated">已廢棄 → {depr}</span>
+    const target = Array.isArray(depr) ? depr.join(', ') : depr
+    return (
+      <span className="badge badge-deprecated">
+        {deprAt && <span className="depr-version">{deprAt}</span>}
+        {' '}已廢棄 → <span className="code-link code-link-badge" onClick={() => onSearch(Array.isArray(depr) ? depr[0] : depr)}>{target}</span>
+      </span>
+    )
   }
   if (intro) {
     return <span className="badge badge-new">新增於 {intro}</span>
@@ -103,10 +335,9 @@ function StatusBadge({ code, data }) {
   return <span className="badge badge-active">現行有效</span>
 }
 
-function DonatedSection({ donated }) {
+function DonatedSection({ donated, onSearch, ipcGroups }) {
   if (!donated || donated.length === 0) return null
 
-  // Group by version
   const byVersion = {}
   donated.forEach(item => {
     if (!byVersion[item.version]) byVersion[item.version] = []
@@ -133,8 +364,8 @@ function DonatedSection({ donated }) {
             <tbody>
               {items.map((item, i) => (
                 <tr key={i}>
-                  <td className="code-cell">{item.src_group}</td>
-                  <td className="code-cell">{item.dst}</td>
+                  <td className="code-cell"><DstCell dst={item.src_group} onSearch={onSearch} ipcGroups={ipcGroups} /></td>
+                  <td className="code-cell"><DstCell dst={item.dst} onSearch={onSearch} ipcGroups={ipcGroups} /></td>
                 </tr>
               ))}
             </tbody>
@@ -145,7 +376,7 @@ function DonatedSection({ donated }) {
   )
 }
 
-function ReceivedSection({ received }) {
+function ReceivedSection({ received, onSearch, ipcGroups }) {
   if (!received || received.length === 0) return null
 
   const byVersion = {}
@@ -175,9 +406,9 @@ function ReceivedSection({ received }) {
             <tbody>
               {items.map((item, i) => (
                 <tr key={i}>
-                  <td className="code-cell source-sub">{item.src_sub}</td>
-                  <td className="code-cell">{item.from}</td>
-                  <td className="code-cell">{item.dst}</td>
+                  <td className="code-cell source-sub"><CodeLink text={item.src_sub} onSearch={onSearch} /></td>
+                  <td className="code-cell"><DstCell dst={item.from} onSearch={onSearch} ipcGroups={ipcGroups} /></td>
+                  <td className="code-cell"><DstCell dst={item.dst} onSearch={onSearch} ipcGroups={ipcGroups} /></td>
                 </tr>
               ))}
             </tbody>
@@ -188,13 +419,14 @@ function ReceivedSection({ received }) {
   )
 }
 
-function SubclassCard({ code, data }) {
+function SubclassCard({ code, data, onSearch, onFlowView, ipcGroups }) {
   const entry = data.subclass_index[code] || {}
   const donated = entry.donated || []
   const received = entry.received || []
   const name = getSubclassName(code)
   const intro = data.introduced_in[code]
   const depr = data.deprecated_to[code]
+  const deprAt = data.deprecated_at && data.deprecated_at[code]
 
   return (
     <div className="subclass-card">
@@ -203,7 +435,12 @@ function SubclassCard({ code, data }) {
           <span className="subclass-code">{code}</span>
           {name && <span className="subclass-name">{name}</span>}
         </div>
-        <StatusBadge code={code} data={data} />
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <StatusBadge code={code} data={data} onSearch={onSearch} />
+          {onFlowView && (donated.length > 0 || received.length > 0) && (
+            <button className="flow-btn" onClick={() => onFlowView(code)}>查看流變</button>
+          )}
+        </div>
       </div>
 
       {intro && (
@@ -216,7 +453,8 @@ function SubclassCard({ code, data }) {
       {depr && (
         <div className="info-row">
           <span className="info-label">廢棄去向：</span>
-          <span className="info-value">{depr}</span>
+          <span className="info-value">{Array.isArray(depr) ? depr.join(', ') : depr}</span>
+          {deprAt && <span className="info-note">（於 {deprAt} 版廢棄）</span>}
         </div>
       )}
 
@@ -224,15 +462,160 @@ function SubclassCard({ code, data }) {
         <div className="no-moves">此分類在現有記錄中無跨分類異動。</div>
       ) : (
         <>
-          <DonatedSection donated={donated} />
-          <ReceivedSection received={received} />
+          <DonatedSection donated={donated} onSearch={onSearch} ipcGroups={ipcGroups} />
+          <ReceivedSection received={received} onSearch={onSearch} ipcGroups={ipcGroups} />
         </>
       )}
     </div>
   )
 }
 
-function PrefixList({ prefix, data }) {
+// Card for exact group-level code (4th/5th level)
+function GroupCard({ code, groupIndex, onSearch, onFlowView, ipcGroups }) {
+  const entries = groupIndex[code] || []
+  const subclass = code.slice(0, 4)
+  const subclassName = getSubclassName(subclass)
+
+  const donated = entries.filter(e => e.type === 'donated')
+  const received = entries.filter(e => e.type === 'received')
+
+  const byVersionDonated = {}
+  donated.forEach(e => {
+    const v = e.record.version
+    if (!byVersionDonated[v]) byVersionDonated[v] = []
+    byVersionDonated[v].push(e)
+  })
+
+  const byVersionReceived = {}
+  received.forEach(e => {
+    const v = e.record.version
+    if (!byVersionReceived[v]) byVersionReceived[v] = []
+    byVersionReceived[v].push(e)
+  })
+
+  return (
+    <div className="subclass-card">
+      <div className="card-header">
+        <div className="card-title-row">
+          <span className="subclass-code">{code}</span>
+          {subclassName && (
+            <span className="subclass-name">所屬分類：<CodeLink text={subclass} onSearch={onSearch} /> {subclassName}</span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          {donated.length > 0 && <span className="badge badge-deprecated">{donated.length} 筆移出</span>}
+          {received.length > 0 && <span className="badge badge-new">{received.length} 筆移入</span>}
+          {onFlowView && (donated.length > 0 || received.length > 0) && (
+            <button className="flow-btn" onClick={() => onFlowView(code)}>查看流變</button>
+          )}
+        </div>
+      </div>
+
+      {donated.length > 0 && (
+        <div className="history-section">
+          <h3 className="section-title donated-title">
+            <span className="section-icon">→</span>
+            此組號移出紀錄
+            <span className="count-badge">{donated.length} 筆</span>
+          </h3>
+          {Object.entries(byVersionDonated).map(([ver, items]) => (
+            <div key={ver} className="version-group">
+              <div className="version-label">{ver}</div>
+              <table className="move-table">
+                <thead>
+                  <tr>
+                    <th>原始組號</th>
+                    <th>移入目的地</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((e, i) => (
+                    <tr key={i}>
+                      <td className="code-cell"><DstCell dst={e.record.src_group} onSearch={onSearch} ipcGroups={ipcGroups} /></td>
+                      <td className="code-cell"><DstCell dst={e.record.dst} onSearch={onSearch} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {received.length > 0 && (
+        <div className="history-section">
+          <h3 className="section-title received-title">
+            <span className="section-icon">←</span>
+            此組號接收紀錄
+            <span className="count-badge">{received.length} 筆</span>
+          </h3>
+          {Object.entries(byVersionReceived).map(([ver, items]) => (
+            <div key={ver} className="version-group">
+              <div className="version-label">{ver}</div>
+              <table className="move-table">
+                <thead>
+                  <tr>
+                    <th>來源分類</th>
+                    <th>原始組號</th>
+                    <th>移入目的地</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((e, i) => (
+                    <tr key={i}>
+                      <td className="code-cell source-sub"><CodeLink text={e.record.src_sub} onSearch={onSearch} /></td>
+                      <td className="code-cell"><DstCell dst={e.record.from} onSearch={onSearch} ipcGroups={ipcGroups} /></td>
+                      <td className="code-cell"><DstCell dst={e.record.dst} onSearch={onSearch} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {donated.length === 0 && received.length === 0 && (
+        <div className="no-moves">此組號在現有記錄中無跨分類異動。</div>
+      )}
+    </div>
+  )
+}
+
+// List for prefix group-level search
+function GroupList({ prefix, matches, groupIndex, onSelect }) {
+  if (matches.length === 0) {
+    return <div className="no-result">找不到以「{prefix}」開頭的 IPC 組號。</div>
+  }
+
+  return (
+    <div className="prefix-results">
+      <div className="prefix-header">
+        找到 {matches.length} 個以「{prefix}」開頭的組號：
+      </div>
+      <div className="prefix-grid">
+        {matches.map(code => {
+          const entries = groupIndex[code] || []
+          return (
+            <div
+              key={code}
+              className="prefix-item"
+              style={{ cursor: 'pointer' }}
+              onClick={() => onSelect(code)}
+            >
+              <div className="prefix-item-code">{code}</div>
+              <div className="prefix-item-stats">
+                {entries.length > 0 && <span className="stat donated-stat">移出 {entries.length}</span>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function PrefixList({ prefix, data, onSearch }) {
   const matches = Object.keys(data.subclass_index)
     .filter(k => k.startsWith(prefix.toUpperCase()))
     .sort()
@@ -254,7 +637,7 @@ function PrefixList({ prefix, data }) {
           const depr = data.deprecated_to[code]
           const intro = data.introduced_in[code]
           return (
-            <div key={code} className={`prefix-item ${depr ? 'is-deprecated' : ''}`}>
+            <div key={code} className={`prefix-item ${depr ? 'is-deprecated' : ''}`} style={{ cursor: 'pointer' }} onClick={() => onSearch(code)}>
               <div className="prefix-item-code">{code}</div>
               {getSubclassName(code) && (
                 <div className="prefix-item-name">{getSubclassName(code)}</div>
@@ -276,16 +659,235 @@ function PrefixList({ prefix, data }) {
   )
 }
 
+// ── Flow Graph: build directed graph of group-level transfers ──
+
+function buildFlowGraph(subclass_index) {
+  // graph[code] = { donatedTo: [{version, dst, dstSub}], receivedFrom: [{version, from, fromSub}] }
+  const graph = {}
+  const SINGLE_RE = /[A-H]\d{2}[A-Z]\s+\d+\/\d+/g
+
+  function ensure(code) {
+    if (!graph[code]) graph[code] = { donatedTo: [], receivedFrom: [] }
+  }
+
+  Object.entries(subclass_index).forEach(([subclass, entry]) => {
+    ;(entry.donated || []).forEach(rec => {
+      const src = (rec.src_group || '').trim()
+      if (!src) return
+      ensure(src)
+      // Parse dst into individual codes
+      const dstCodes = []
+      const matches = rec.dst.matchAll(SINGLE_RE)
+      for (const m of matches) {
+        dstCodes.push(m[0])
+      }
+      if (dstCodes.length === 0 && rec.dst.trim()) {
+        dstCodes.push(rec.dst.trim())
+      }
+      const ver = rec.version
+      dstCodes.forEach(dst => {
+        graph[src].donatedTo.push({ version: ver, dst, dstSub: dst.slice(0, 4) })
+        ensure(dst)
+        graph[dst].receivedFrom.push({ version: ver, from: src, fromSub: subclass })
+      })
+    })
+  })
+  return graph
+}
+
+function traceFlow(startCode, flowGraph, direction = 'both', maxDepth = 8) {
+  // Returns { nodes: [{code, depth, direction}], edges: [{from, to, version}] }
+  const nodes = new Map() // code → {code, depth, direction}
+  const edges = []
+  const visited = new Set()
+
+  function traceDown(code, depth) {
+    if (depth > maxDepth || visited.has('down:' + code)) return
+    visited.add('down:' + code)
+    const entry = flowGraph[code]
+    if (!entry) return
+    entry.donatedTo.forEach(({ version, dst }) => {
+      if (!nodes.has(dst)) nodes.set(dst, { code: dst, direction: 'downstream' })
+      edges.push({ from: code, to: dst, version })
+      traceDown(dst, depth + 1)
+    })
+  }
+
+  function traceUp(code, depth) {
+    if (depth > maxDepth || visited.has('up:' + code)) return
+    visited.add('up:' + code)
+    const entry = flowGraph[code]
+    if (!entry) return
+    entry.receivedFrom.forEach(({ version, from }) => {
+      if (!nodes.has(from)) nodes.set(from, { code: from, direction: 'upstream' })
+      edges.push({ from: from, to: code, version })
+      traceUp(from, depth + 1)
+    })
+  }
+
+  nodes.set(startCode, { code: startCode, direction: 'origin' })
+  if (direction === 'both' || direction === 'down') traceDown(startCode, 0)
+  if (direction === 'both' || direction === 'up') traceUp(startCode, 0)
+
+  return { nodes: [...nodes.values()], edges }
+}
+
+function traceSubclassFlow(subclass, flowGraph, subclass_index) {
+  // Aggregate all group-level flows for a subclass
+  const entry = subclass_index[subclass] || {}
+  const allEdges = []
+  const allNodes = new Map()
+
+  // Find all unique group codes involved with this subclass
+  const groupCodes = new Set()
+  ;(entry.donated || []).forEach(rec => {
+    if (rec.src_group) groupCodes.add(rec.src_group.trim())
+  })
+  ;(entry.received || []).forEach(rec => {
+    if (rec.dst) {
+      const matches = rec.dst.matchAll(/[A-H]\d{2}[A-Z]\s+\d+\/\d+/g)
+      for (const m of matches) {
+        if (m[0].startsWith(subclass)) groupCodes.add(m[0])
+      }
+    }
+  })
+
+  groupCodes.forEach(code => {
+    const flow = traceFlow(code, flowGraph, 'both', 4)
+    flow.nodes.forEach(n => {
+      if (!allNodes.has(n.code)) allNodes.set(n.code, n)
+    })
+    flow.edges.forEach(e => allEdges.push(e))
+  })
+
+  // Deduplicate edges
+  const edgeSet = new Set()
+  const uniqueEdges = allEdges.filter(e => {
+    const key = `${e.from}→${e.to}@${e.version}`
+    if (edgeSet.has(key)) return false
+    edgeSet.add(key)
+    return true
+  })
+
+  return { nodes: [...allNodes.values()], edges: uniqueEdges }
+}
+
+// Parse version string "1995.01→2000.01" into the target version for ordering
+function versionOrder(verStr) {
+  const m = verStr.match(/(\d{4})\.(\d{2})→(\d{4})\.(\d{2})/)
+  if (m) return parseInt(m[3]) * 100 + parseInt(m[4])
+  return 0
+}
+
+function FlowChart({ code, flowGraph, data, onSearch, onBack }) {
+  const isSubclass = /^[A-H]\d{2}[A-Z]$/.test(code)
+  const flow = isSubclass
+    ? traceSubclassFlow(code, flowGraph, data.subclass_index)
+    : traceFlow(code, flowGraph)
+
+  if (flow.edges.length === 0) {
+    return (
+      <div className="subclass-card">
+        <div className="card-header">
+          <span className="subclass-code">{code}</span>
+          <button className="flow-back-btn" onClick={onBack}>← 返回</button>
+        </div>
+        <div className="no-moves">此代碼在現有記錄中無跨版本流變紀錄。</div>
+      </div>
+    )
+  }
+
+  // Group edges by version, sorted chronologically
+  const byVersion = {}
+  flow.edges.forEach(e => {
+    if (!byVersion[e.version]) byVersion[e.version] = []
+    byVersion[e.version].push(e)
+  })
+  const sortedVersions = Object.keys(byVersion).sort((a, b) => versionOrder(a) - versionOrder(b))
+
+  // Collect unique subclasses for color coding
+  const subclasses = new Set()
+  flow.nodes.forEach(n => subclasses.add(n.code.slice(0, 4)))
+
+  const subColors = {}
+  const palette = ['#0d6efd', '#dc3545', '#198754', '#6f42c1', '#fd7e14', '#20c997', '#e83e8c', '#6610f2', '#ffc107', '#17a2b8']
+  let ci = 0
+  subclasses.forEach(s => { subColors[s] = palette[ci++ % palette.length] })
+
+  return (
+    <div className="subclass-card flow-card">
+      <div className="card-header">
+        <div className="card-title-row">
+          <span className="subclass-code">{code}</span>
+          {getSubclassName(code.slice(0, 4)) && (
+            <span className="subclass-name">
+              {isSubclass ? getSubclassName(code) : `所屬分類：${code.slice(0, 4)} ${getSubclassName(code.slice(0, 4))}`}
+            </span>
+          )}
+        </div>
+        <button className="flow-back-btn" onClick={onBack}>← 返回</button>
+      </div>
+
+      <div className="flow-legend">
+        {[...subclasses].map(s => (
+          <span key={s} className="flow-legend-item" style={{ borderColor: subColors[s], color: subColors[s] }}>
+            {s}{getSubclassName(s) ? ` ${getSubclassName(s)}` : ''}
+          </span>
+        ))}
+      </div>
+
+      <div className="flow-timeline-wrap">
+        <div className="flow-timeline">
+          {sortedVersions.map(ver => (
+            <div key={ver} className="flow-version-col">
+              <div className="flow-version-header">{ver}</div>
+              <div className="flow-edges">
+                {byVersion[ver].map((e, i) => (
+                  <div key={i} className="flow-edge">
+                    <span
+                      className="flow-node"
+                      style={{ borderLeftColor: subColors[e.from.slice(0, 4)] }}
+                      onClick={() => onSearch(e.from)}
+                    >
+                      {e.from}
+                    </span>
+                    <span className="flow-arrow">→</span>
+                    <span
+                      className="flow-node"
+                      style={{ borderLeftColor: subColors[e.to.slice(0, 4)] }}
+                      onClick={() => onSearch(e.to)}
+                    >
+                      {e.to}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flow-stats">
+        共 {flow.nodes.length} 個節點、{flow.edges.length} 筆異動、橫跨 {sortedVersions.length} 個版本
+      </div>
+    </div>
+  )
+}
+
 const EXAMPLES = ['H01L', 'B01J', 'G06K', 'B29D', 'H10B', 'B81B', 'G06Q', 'E21B', 'F24S', 'C40B']
 
 export default function App() {
   const [query, setQuery] = useState('')
   const [input, setInput] = useState('')
   const [data, setData] = useState(null)
+  const [groupIndex, setGroupIndex] = useState(null)
+  const [flowGraph, setFlowGraph] = useState(null)
+  const [ipcGroups, setIpcGroups] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [suggestions, setSuggestions] = useState([])
   const [showSugg, setShowSugg] = useState(false)
+  const [flowCode, setFlowCode] = useState(null) // non-null = show flow chart
   const inputRef = useRef(null)
   const suggRef = useRef(null)
 
@@ -295,20 +897,42 @@ export default function App() {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
       })
-      .then(d => { setData(d); setLoading(false) })
+      .then(d => {
+        setData(d)
+        setGroupIndex(buildGroupIndex(d.subclass_index))
+        setFlowGraph(buildFlowGraph(d.subclass_index))
+        setLoading(false)
+        // Load IPC groups for range expansion (non-blocking)
+        fetch(`${import.meta.env.BASE_URL}ipc_groups.json`)
+          .then(r => r.ok ? r.json() : null)
+          .then(g => { if (g) setIpcGroups(g) })
+          .catch(() => {})
+      })
       .catch(e => { setError(e.message); setLoading(false) })
   }, [])
 
   useEffect(() => {
-    if (!data || input.length < 1) {
+    if (!data || !groupIndex || input.length < 1) {
       setSuggestions([])
       return
     }
     const up = input.toUpperCase()
-    const all = Object.keys(data.subclass_index).sort()
-    const matches = all.filter(k => k.startsWith(up)).slice(0, 10)
-    setSuggestions(matches)
-  }, [input, data])
+
+    if (isGroupQuery(up)) {
+      // Group-level autocomplete
+      const normalized = normalizeGroupQuery(up)
+      const matches = Object.keys(groupIndex)
+        .filter(k => k.startsWith(normalized))
+        .sort()
+        .slice(0, 10)
+      setSuggestions(matches)
+    } else {
+      // Subclass-level autocomplete
+      const all = Object.keys(data.subclass_index).sort()
+      const matches = all.filter(k => k.startsWith(up)).slice(0, 10)
+      setSuggestions(matches)
+    }
+  }, [input, data, groupIndex])
 
   useEffect(() => {
     function handleClick(e) {
@@ -324,11 +948,13 @@ export default function App() {
   }, [])
 
   function handleSearch(value) {
-    const v = (value || input).trim().toUpperCase()
-    if (!v) return
+    const raw = (value !== undefined ? value : input).trim().toUpperCase()
+    if (!raw) return
+    const v = isGroupQuery(raw) ? normalizeGroupQuery(raw) : raw
     setQuery(v)
     setInput(v)
     setShowSugg(false)
+    setFlowCode(null) // exit flow view on new search
   }
 
   function handleKeyDown(e) {
@@ -344,19 +970,32 @@ export default function App() {
 
   // Compute result
   let result = null
-  if (data && query) {
+  if (data && groupIndex && query) {
     const up = query.toUpperCase()
-    if (data.subclass_index[up]) {
-      result = { type: 'exact', code: up }
+
+    if (isGroupQuery(up)) {
+      // Group-level search
+      const normalized = normalizeGroupQuery(up)
+      if (groupIndex[normalized]) {
+        result = { type: 'group-exact', code: normalized }
+      } else {
+        const matches = Object.keys(groupIndex)
+          .filter(k => k.startsWith(normalized))
+          .sort()
+        result = { type: 'group-prefix', prefix: normalized, matches }
+      }
     } else {
-      // Check if it's a deprecated subclass not in index
-      const depr = data.deprecated_to[up]
-      const intro = data.introduced_in[up]
-      if (depr || intro) {
+      // Subclass-level search (existing logic)
+      if (data.subclass_index[up]) {
         result = { type: 'exact', code: up }
       } else {
-        // prefix search
-        result = { type: 'prefix', prefix: up }
+        const depr = data.deprecated_to[up]
+        const intro = data.introduced_in[up]
+        if (depr || intro) {
+          result = { type: 'exact', code: up }
+        } else {
+          result = { type: 'prefix', prefix: up }
+        }
       }
     }
   }
@@ -377,7 +1016,7 @@ export default function App() {
               ref={inputRef}
               className="search-input"
               type="text"
-              placeholder="輸入 IPC 分類代碼，例如 H01L 或 B01"
+              placeholder="輸入 IPC 代碼，例如 H01L、H01L 21 或 H01L 21/677"
               value={input}
               onChange={e => { setInput(e.target.value); setShowSugg(true) }}
               onKeyDown={handleKeyDown}
@@ -393,7 +1032,7 @@ export default function App() {
                 {suggestions.map(code => (
                   <li key={code} className="suggestion-item" onMouseDown={() => handleSuggClick(code)}>
                     <span className="sugg-code">{code}</span>
-                    {getSubclassName(code) && (
+                    {getSubclassName(code.slice(0, 4)) && !isGroupQuery(code) && (
                       <span className="sugg-name">{getSubclassName(code)}</span>
                     )}
                   </li>
@@ -419,14 +1058,36 @@ export default function App() {
             <div className="empty-state">
               <div className="empty-icon">🔍</div>
               <p>輸入 IPC 分類代碼（如 <code>H01L</code>）查詢其歷史異動記錄</p>
-              <p className="empty-sub">支援完整代碼（如 <code>H01L</code>）或前綴搜尋（如 <code>H01</code> 或 <code>H</code>）</p>
+              <p className="empty-sub">
+                支援分類代碼（如 <code>H01L</code>）、組號（如 <code>H01L 21/677</code>）或前綴搜尋（如 <code>H01</code>、<code>H01L 21</code>）
+              </p>
             </div>
           )}
-          {!loading && !error && result && result.type === 'exact' && (
-            <SubclassCard code={result.code} data={data} />
+          {!loading && !error && flowCode && flowGraph && (
+            <FlowChart
+              code={flowCode}
+              flowGraph={flowGraph}
+              data={data}
+              onSearch={handleSearch}
+              onBack={() => setFlowCode(null)}
+            />
           )}
-          {!loading && !error && result && result.type === 'prefix' && (
-            <PrefixList prefix={result.prefix} data={data} />
+          {!loading && !error && !flowCode && result && result.type === 'exact' && (
+            <SubclassCard code={result.code} data={data} onSearch={handleSearch} onFlowView={setFlowCode} ipcGroups={ipcGroups} />
+          )}
+          {!loading && !error && !flowCode && result && result.type === 'prefix' && (
+            <PrefixList prefix={result.prefix} data={data} onSearch={handleSearch} />
+          )}
+          {!loading && !error && !flowCode && result && result.type === 'group-exact' && (
+            <GroupCard code={result.code} groupIndex={groupIndex} onSearch={handleSearch} onFlowView={setFlowCode} ipcGroups={ipcGroups} />
+          )}
+          {!loading && !error && !flowCode && result && result.type === 'group-prefix' && (
+            <GroupList
+              prefix={result.prefix}
+              matches={result.matches}
+              groupIndex={groupIndex}
+              onSelect={code => { setInput(code); setQuery(code) }}
+            />
           )}
         </div>
       </main>

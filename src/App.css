@@ -437,6 +437,22 @@ body {
   color: var(--text);
 }
 
+.code-link {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: var(--primary);
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.code-link:hover {
+  text-decoration: underline solid;
+}
+.code-link-badge {
+  color: inherit;
+  font-family: inherit;
+  font-weight: 600;
+}
+
 .source-sub {
   font-weight: 600;
   color: var(--primary);
@@ -556,6 +572,136 @@ body {
 
 .app-footer a:hover {
   text-decoration: underline;
+}
+
+/* ── Flow Chart ── */
+.flow-btn {
+  padding: 4px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border: 1px solid var(--primary);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.flow-btn:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+.flow-back-btn {
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.flow-back-btn:hover {
+  background: var(--version-bg);
+  color: var(--text);
+}
+
+.flow-card {
+  overflow: visible;
+}
+
+.flow-legend {
+  padding: 10px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-light);
+  background: #fafbfc;
+}
+.flow-legend-item {
+  font-size: 0.72rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid;
+  background: var(--card-bg);
+  white-space: nowrap;
+}
+
+.flow-timeline-wrap {
+  overflow-x: auto;
+  padding: 16px 0;
+}
+.flow-timeline {
+  display: flex;
+  gap: 0;
+  min-width: max-content;
+  padding: 0 12px;
+}
+.flow-version-col {
+  min-width: 220px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-light);
+}
+.flow-version-col:last-child {
+  border-right: none;
+}
+.flow-version-header {
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: var(--version-color);
+  background: var(--version-bg);
+  text-align: center;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--border-light);
+}
+.flow-edges {
+  padding: 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.flow-edge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+.flow-edge:hover {
+  background: var(--border-light);
+}
+.flow-node {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border-left: 3px solid;
+  background: var(--card-bg);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s;
+}
+.flow-node:hover {
+  background: var(--version-bg);
+}
+.flow-arrow {
+  color: var(--text-light);
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+.flow-stats {
+  padding: 10px 20px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-light);
+  text-align: center;
 }
 
 /* ── Mobile ── */
