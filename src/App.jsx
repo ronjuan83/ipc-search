@@ -398,7 +398,6 @@ function ReceivedSection({ received, onSearch, ipcGroups }) {
           <table className="move-table">
             <thead>
               <tr>
-                <th>來源分類</th>
                 <th>原始組號</th>
                 <th>移入目的地</th>
               </tr>
@@ -406,7 +405,6 @@ function ReceivedSection({ received, onSearch, ipcGroups }) {
             <tbody>
               {items.map((item, i) => (
                 <tr key={i}>
-                  <td className="code-cell source-sub"><CodeLink text={item.src_sub} onSearch={onSearch} /></td>
                   <td className="code-cell"><DstCell dst={item.from} onSearch={onSearch} ipcGroups={ipcGroups} /></td>
                   <td className="code-cell"><DstCell dst={item.dst} onSearch={onSearch} ipcGroups={ipcGroups} /></td>
                 </tr>
@@ -447,7 +445,9 @@ function SubclassCard({ code, data, onSearch, onFlowView, ipcGroups }) {
         <div className="info-row">
           <span className="info-label">引入版本：</span>
           <span className="info-value">{intro}</span>
-          <span className="info-note">（此分類在 IPC 第 6 版以前不存在）</span>
+          <span className="info-note">
+            （此分類於 {intro} 版新設，在此之前不存在）
+          </span>
         </div>
       )}
       {depr && (
@@ -555,7 +555,6 @@ function GroupCard({ code, groupIndex, onSearch, onFlowView, ipcGroups }) {
               <table className="move-table">
                 <thead>
                   <tr>
-                    <th>來源分類</th>
                     <th>原始組號</th>
                     <th>移入目的地</th>
                   </tr>
@@ -563,9 +562,8 @@ function GroupCard({ code, groupIndex, onSearch, onFlowView, ipcGroups }) {
                 <tbody>
                   {items.map((e, i) => (
                     <tr key={i}>
-                      <td className="code-cell source-sub"><CodeLink text={e.record.src_sub} onSearch={onSearch} /></td>
                       <td className="code-cell"><DstCell dst={e.record.from} onSearch={onSearch} ipcGroups={ipcGroups} /></td>
-                      <td className="code-cell"><DstCell dst={e.record.dst} onSearch={onSearch} /></td>
+                      <td className="code-cell"><DstCell dst={e.record.dst} onSearch={onSearch} ipcGroups={ipcGroups} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -616,7 +614,13 @@ function GroupList({ prefix, matches, groupIndex, onSelect }) {
 }
 
 function PrefixList({ prefix, data, onSearch }) {
-  const matches = Object.keys(data.subclass_index)
+  // Merge all known subclass codes from subclass_index, introduced_in, and deprecated_to
+  const allCodes = new Set([
+    ...Object.keys(data.subclass_index),
+    ...Object.keys(data.introduced_in || {}),
+    ...Object.keys(data.deprecated_to || {})
+  ])
+  const matches = [...allCodes]
     .filter(k => k.startsWith(prefix.toUpperCase()))
     .sort()
 
@@ -927,8 +931,13 @@ export default function App() {
         .slice(0, 10)
       setSuggestions(matches)
     } else {
-      // Subclass-level autocomplete
-      const all = Object.keys(data.subclass_index).sort()
+      // Subclass-level autocomplete (include introduced_in and deprecated_to codes)
+      const allSubs = new Set([
+        ...Object.keys(data.subclass_index),
+        ...Object.keys(data.introduced_in || {}),
+        ...Object.keys(data.deprecated_to || {})
+      ])
+      const all = [...allSubs].sort()
       const matches = all.filter(k => k.startsWith(up)).slice(0, 10)
       setSuggestions(matches)
     }
