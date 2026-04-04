@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import Fuse from 'fuse.js'
 import './App.css'
 
 // Subclass names — loaded dynamically from ipc_names.json
@@ -411,10 +412,12 @@ function FlowSummary({ code, flowGraph, data, onSearch }) {
   )
 }
 
-function SubclassCard({ code, data, onSearch, ipcGroups, flowGraph }) {
+function SubclassCard({ code, data, onSearch, ipcGroups, flowGraph, selectedVersion }) {
   const entry = data.subclass_index[code] || {}
-  const donated = entry.donated || []
-  const received = entry.received || []
+  const allDonated = entry.donated || []
+  const allReceived = entry.received || []
+  const donated = selectedVersion ? allDonated.filter(r => r.version === selectedVersion) : allDonated
+  const received = selectedVersion ? allReceived.filter(r => r.version === selectedVersion) : allReceived
   const name = getSubclassName(code)
   const intro = data.introduced_in[code]
   const depr = data.deprecated_to[code]
@@ -1077,6 +1080,86 @@ function TimelineChart({ sortedVersions, byVersion, originSub, subColors, expand
   )
 }
 
+// ── Tech Classifier: fuzzy match tech description → IPC code ──
+
+function TechClassifier({ onSearch }) {
+  const [techInput, setTechInput] = useState('')
+  const [techKeywords, setTechKeywords] = useState(null)
+  const [suggestions, setSuggestions] = useState([])
+
+  useEffect(() => {
+    fetch(`${import.meta.env.BASE_URL}tech_keywords.json`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setTechKeywords(d) })
+      .catch(() => {})
+  }, [])
+
+  // Build Fuse.js index (reuse patent-query config)
+  const fuse = useMemo(() => {
+    if (!techKeywords) return null
+    const corpus = techKeywords.map(t => ({
+      code: t.code,
+      label: t.label,
+      keywords: t.keywords,
+      name: getSubclassName(t.code)
+    }))
+    return new Fuse(corpus, {
+      keys: [
+        { name: 'code', weight: 4 },
+        { name: 'name', weight: 2 },
+        { name: 'label', weight: 1.5 },
+        { name: 'keywords', weight: 1 },
+      ],
+      threshold: 0.35,
+      minMatchCharLength: 1,
+      includeScore: true,
+      shouldSort: true,
+    })
+  }, [techKeywords])
+
+  useEffect(() => {
+    const q = techInput.trim()
+    if (!q || !fuse) { setSuggestions([]); return }
+    const results = fuse.search(q, { limit: 5 })
+    setSuggestions(results.map(({ item, score }) => ({
+      code: item.code,
+      label: item.label || item.name,
+      name: item.name,
+      score: Math.round((1 - (score ?? 1)) * 100),
+    })))
+  }, [techInput, fuse])
+
+  if (!techKeywords) return null
+
+  return (
+    <div className="tech-classifier">
+      <div className="tech-classifier-header">技術特徵重分類</div>
+      <div className="tech-classifier-body">
+        <input
+          className="tech-input"
+          type="text"
+          placeholder="輸入技術描述，如：太陽能電池、3D列印、人工智慧..."
+          value={techInput}
+          onChange={e => setTechInput(e.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        {suggestions.length > 0 && (
+          <div className="tech-suggestions">
+            {suggestions.map(s => (
+              <div key={s.code} className="tech-suggestion-item" onClick={() => { onSearch(s.code); setTechInput(''); setSuggestions([]) }}>
+                <span className="tech-sugg-code">{s.code}</span>
+                <span className="tech-sugg-label">{s.label || s.name}</span>
+                <span className="tech-sugg-score">{s.score} 分</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 const EXAMPLES = ['H01L', 'B01J', 'G06K', 'B29D', 'H10B', 'B81B', 'G06Q', 'E21B', 'F24S', 'C40B']
 
 // Read ?ipc= from URL
@@ -1097,6 +1180,7 @@ export default function App() {
   const [error, setError] = useState(null)
   const [suggestions, setSuggestions] = useState([])
   const [showSugg, setShowSugg] = useState(false)
+  const [selectedVersion, setSelectedVersion] = useState('') // '' = all versions
 
   const inputRef = useRef(null)
   const suggRef = useRef(null)
@@ -1312,6 +1396,19 @@ export default function App() {
               autoComplete="off"
               spellCheck={false}
             />
+            <select className="version-select" value={selectedVersion} onChange={e => setSelectedVersion(e.target.value)}>
+              <option value="">全部版本</option>
+              {data && (() => {
+                const vers = new Set()
+                Object.values(data.subclass_index).forEach(e => {
+                  ;(e.donated || []).forEach(r => vers.add(r.version))
+                  ;(e.received || []).forEach(r => vers.add(r.version))
+                })
+                return [...vers].sort((a, b) => versionOrder(a) - versionOrder(b)).map(v => (
+                  <option key={v} value={v}>{v}</option>
+                ))
+              })()}
+            </select>
             <button className="search-btn" onClick={() => handleSearch()} disabled={loading}>
               搜尋
             </button>
@@ -1329,6 +1426,8 @@ export default function App() {
             )}
           </div>
         </div>
+
+        <TechClassifier onSearch={handleSearch} />
 
         <div className="example-chips">
           <span className="example-label">範例：</span>
@@ -1352,7 +1451,7 @@ export default function App() {
             </div>
           )}
           {!loading && !error && result && result.type === 'exact' && (
-            <SubclassCard code={result.code} data={data} onSearch={handleSearch} ipcGroups={ipcGroups} flowGraph={flowGraph} />
+            <SubclassCard code={result.code} data={data} onSearch={handleSearch} ipcGroups={ipcGroups} flowGraph={flowGraph} selectedVersion={selectedVersion} />
           )}
           {!loading && !error && result && result.type === 'prefix' && (
             <PrefixList prefix={result.prefix} data={data} onSearch={handleSearch} />

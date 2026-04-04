@@ -124,6 +124,96 @@ body {
   cursor: not-allowed;
 }
 
+/* ── Version Select ── */
+.version-select {
+  padding: 10px 8px;
+  font-size: 0.82rem;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  color: var(--text);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  cursor: pointer;
+  min-width: 120px;
+}
+.version-select:focus {
+  border-color: var(--primary);
+  outline: none;
+}
+
+/* ── Tech Classifier ── */
+.tech-classifier {
+  margin-bottom: 16px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.tech-classifier-header {
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--version-bg);
+  border-bottom: 1px solid var(--border-light);
+}
+.tech-classifier-body {
+  padding: 10px 14px;
+}
+.tech-input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  outline: none;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+.tech-input:focus {
+  border-color: var(--primary);
+}
+.tech-suggestions {
+  margin-top: 8px;
+}
+.tech-suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+.tech-suggestion-item:hover {
+  background: var(--version-bg);
+}
+.tech-sugg-code {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--primary);
+  min-width: 42px;
+}
+.tech-sugg-label {
+  font-size: 0.82rem;
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tech-sugg-score {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--border-light);
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
 /* ── Autocomplete ── */
 .suggestions {
   position: absolute;
