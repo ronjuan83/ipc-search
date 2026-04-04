@@ -596,7 +596,7 @@ function GroupCard({ code, groupIndex, onSearch, ipcGroups }) {
                   {items.map((e, i) => (
                     <tr key={i}>
                       <td className="code-cell"><DstCell dst={e.record.src_group} onSearch={onSearch} ipcGroups={ipcGroups} /></td>
-                      <td className="code-cell"><DstCell dst={e.record.dst} onSearch={onSearch} showTitles /></td>
+                      <td className="code-cell"><DstCell dst={e.record.dst} onSearch={onSearch} ipcGroups={ipcGroups} showTitles /></td>
                     </tr>
                   ))}
                 </tbody>
