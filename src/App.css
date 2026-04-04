@@ -808,14 +808,21 @@ body {
   background: var(--border-light);
 }
 .tl-direction {
-  font-weight: 700;
-  font-size: 0.85rem;
-  width: 18px;
-  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
   flex-shrink: 0;
+  letter-spacing: 0.02em;
 }
-.tl-direction.out { color: var(--donated-color); }
-.tl-direction.in { color: var(--received-color); }
+.tl-direction.out {
+  color: var(--badge-depr-text);
+  background: var(--badge-depr-bg);
+}
+.tl-direction.in {
+  color: var(--badge-active-text);
+  background: var(--badge-active-bg);
+}
 .tl-arrow {
   color: var(--text-light);
   font-size: 0.8rem;

@@ -891,7 +891,7 @@ function TimelineChart({ sortedVersions, byVersion, originSub, subColors, expand
                 return (
                   <div key={key} className="tl-flow-row">
                     <div className="tl-flow-summary" onClick={() => toggleSection(sectionKey)}>
-                      <span className={`tl-direction ${isOut ? 'out' : 'in'}`}>{isOut ? '→' : '←'}</span>
+                      <span className={`tl-direction ${isOut ? 'out' : 'in'}`}>{isOut ? '捐出' : '移入'}</span>
                       <span className="flow-sub-chip" style={{ borderColor: subColors[sf.fromSub], color: subColors[sf.fromSub] }}
                             onClick={e => { e.stopPropagation(); onSearch(sf.fromSub) }}>{sf.fromSub}</span>
                       <span className="tl-arrow">→</span>
