@@ -856,205 +856,70 @@ function computeSankeyLayout(flow, originCode) {
   return { nodes: nodeInstances, paths, versions, verToCol, totalW, totalH }
 }
 
-// ── Tree Chart: vertical tree showing subclass lineage across versions ──
+// ── Timeline Chart: git-log style vertical timeline ──
 
-function buildTreeData(rawFlow, originCode) {
-  const originSub = originCode.slice(0, 4)
-
-  // Group edges by version
-  const byVersion = {}
-  rawFlow.edges.forEach(e => {
-    if (!byVersion[e.version]) byVersion[e.version] = []
-    byVersion[e.version].push(e)
-  })
-  const sortedVersions = Object.keys(byVersion).sort((a, b) => versionOrder(a) - versionOrder(b))
-
-  // Build tree layers: for each version, aggregate to subclass level
-  // and track which main groups are involved
-  const layers = sortedVersions.map(ver => {
-    const edges = byVersion[ver]
-    const subFlows = {} // "fromSub→toSub" → { fromSub, toSub, groups: [{from, to}] }
-    edges.forEach(e => {
-      const fromSub = e.from.slice(0, 4)
-      const toSub = e.to.slice(0, 4)
-      if (fromSub === toSub) return // skip internal moves
-      const key = `${fromSub}→${toSub}`
-      if (!subFlows[key]) subFlows[key] = { fromSub, toSub, groups: [] }
-      subFlows[key].groups.push({ from: e.from, to: e.to })
-    })
-    return { version: ver, flows: Object.values(subFlows) }
-  })
-
-  return { layers, originSub }
-}
-
-function TreeChart({ code, flowGraph, data, onSearch }) {
-  const isSubclass = /^[A-H]\d{2}[A-Z]$/.test(code)
-  const rawFlow = isSubclass
-    ? traceSubclassFlow(code, flowGraph, data.subclass_index)
-    : traceFlow(code, flowGraph)
-
-  const [expandedNodes, setExpandedNodes] = useState({})
-
-  if (rawFlow.edges.length === 0) return null
-
-  const { layers, originSub } = buildTreeData(rawFlow, code)
-
-  // Color palette
-  const palette = ['#0d6efd', '#dc3545', '#198754', '#6f42c1', '#fd7e14', '#20c997', '#e83e8c', '#6610f2', '#ffc107', '#17a2b8']
-  const allSubs = new Set()
-  rawFlow.edges.forEach(e => { allSubs.add(e.from.slice(0, 4)); allSubs.add(e.to.slice(0, 4)) })
-  const subColors = {}
-  let ci = 0
-  ;[...allSubs].sort().forEach(s => { subColors[s] = palette[ci++ % palette.length] })
-
-  // Layout: compute node positions for SVG
-  const NODE_W = 80
-  const NODE_H = 32
-  const LAYER_GAP = 90
-  const NODE_GAP = 16
-  const TOP_PAD = 10
-  const LEFT_PAD = 20
-
-  // For each layer, collect unique (fromSub, toSub) pairs
-  // Place source nodes on one row, target nodes on next row, with connecting lines
-  const svgElements = []
-  let currentY = TOP_PAD
-  let maxX = 300
-
-  layers.forEach((layer, li) => {
-    const { version, flows } = layer
-    if (flows.length === 0) return
-
-    // Collect unique source and target subclasses
-    const sources = [...new Set(flows.map(f => f.fromSub))].sort()
-    const targets = [...new Set(flows.map(f => f.toSub))].sort((a, b) => {
-      // Origin subclass first
-      if (a === originSub) return -1
-      if (b === originSub) return 1
-      return a.localeCompare(b)
-    })
-
-    // Version label
-    const verY = currentY
-    svgElements.push({ type: 'verLabel', text: version, y: verY + 12 })
-    currentY += 24
-
-    // Source row
-    const srcY = currentY
-    const srcPositions = {}
-    sources.forEach((s, i) => {
-      const x = LEFT_PAD + i * (NODE_W + NODE_GAP)
-      srcPositions[s] = { x: x + NODE_W / 2, y: srcY + NODE_H / 2 }
-      svgElements.push({
-        type: 'node', code: s, x, y: srcY, w: NODE_W, h: NODE_H,
-        color: subColors[s] || '#999',
-        label: s
-      })
-      maxX = Math.max(maxX, x + NODE_W + LEFT_PAD)
-    })
-    currentY += NODE_H + 12
-
-    // Target row
-    const tgtY = currentY
-    const tgtPositions = {}
-    targets.forEach((t, i) => {
-      const x = LEFT_PAD + i * (NODE_W + NODE_GAP)
-      tgtPositions[t] = { x: x + NODE_W / 2, y: tgtY + NODE_H / 2 }
-      svgElements.push({
-        type: 'node', code: t, x, y: tgtY, w: NODE_W, h: NODE_H,
-        color: subColors[t] || '#999',
-        label: t
-      })
-      maxX = Math.max(maxX, x + NODE_W + LEFT_PAD)
-    })
-
-    // Draw connecting lines
-    flows.forEach(f => {
-      const src = srcPositions[f.fromSub]
-      const tgt = tgtPositions[f.toSub]
-      if (src && tgt) {
-        const expandKey = `${version}|${f.fromSub}→${f.toSub}`
-        svgElements.push({
-          type: 'link', x1: src.x, y1: src.y + NODE_H / 2,
-          x2: tgt.x, y2: tgt.y - NODE_H / 2,
-          color: subColors[f.fromSub] || '#999',
-          count: f.groups.length, expandKey, groups: f.groups
-        })
-      }
-    })
-
-    currentY += NODE_H + LAYER_GAP / 2
-
-    // Expanded details (if any)
-    flows.forEach(f => {
-      const expandKey = `${version}|${f.fromSub}→${f.toSub}`
-      if (expandedNodes[expandKey]) {
-        svgElements.push({
-          type: 'details', y: currentY, expandKey,
-          fromSub: f.fromSub, toSub: f.toSub, groups: f.groups, version
-        })
-        currentY += Math.min(f.groups.length, 8) * 22 + 30
-      }
-    })
-
-    currentY += LAYER_GAP / 2
-  })
-
-  const totalH = currentY + 10
-
-  function toggleExpand(key) {
-    setExpandedNodes(prev => ({ ...prev, [key]: !prev[key] }))
-  }
-
+function TimelineChart({ sortedVersions, byVersion, originSub, subColors, expandedSections, toggleSection, onSearch }) {
   return (
-    <div className="tree-chart-wrap">
-      <svg width={maxX} height={totalH} viewBox={`0 0 ${maxX} ${totalH}`} className="tree-chart-svg">
-        {svgElements.map((el, i) => {
-          if (el.type === 'verLabel') {
-            return <text key={i} x={LEFT_PAD} y={el.y} className="tree-ver-label">{el.text}</text>
-          }
-          if (el.type === 'node') {
-            return (
-              <g key={i} className="tree-node" onClick={() => onSearch(el.code)} style={{ cursor: 'pointer' }}>
-                <rect x={el.x} y={el.y} width={el.w} height={el.h} rx={6} fill={el.color} opacity={0.12} stroke={el.color} strokeWidth={1.5} />
-                <text x={el.x + el.w / 2} y={el.y + el.h / 2 + 4} textAnchor="middle" className="tree-node-label" fill={el.color}>{el.label}</text>
-              </g>
-            )
-          }
-          if (el.type === 'link') {
-            const midY = (el.y1 + el.y2) / 2
-            return (
-              <g key={i} className="tree-link-group" onClick={() => toggleExpand(el.expandKey)} style={{ cursor: 'pointer' }}>
-                <path
-                  d={`M${el.x1},${el.y1} C${el.x1},${midY} ${el.x2},${midY} ${el.x2},${el.y2}`}
-                  fill="none" stroke={el.color} strokeWidth={Math.min(2 + el.count * 0.5, 6)} opacity={0.4}
-                  className="tree-link"
-                />
-                <text x={(el.x1 + el.x2) / 2} y={midY + 4} textAnchor="middle" className="tree-link-count">{el.count}</text>
-              </g>
-            )
-          }
-          if (el.type === 'details') {
-            return (
-              <foreignObject key={i} x={LEFT_PAD} y={el.y} width={maxX - LEFT_PAD * 2} height={Math.min(el.groups.length, 8) * 22 + 26}>
-                <div className="tree-detail-box" xmlns="http://www.w3.org/1999/xhtml">
-                  <div className="tree-detail-header">{el.fromSub} → {el.toSub}（{el.groups.length} 筆）</div>
-                  {el.groups.slice(0, 8).map((g, j) => (
-                    <div key={j} className="tree-detail-row">
-                      <span className="code-link" onClick={() => onSearch(g.from)}>{g.from}</span>
-                      <span className="tree-detail-arrow">→</span>
-                      <span className="code-link" onClick={() => onSearch(g.to)}>{g.to}</span>
+    <div className="timeline-chart">
+      {sortedVersions.map(ver => {
+        const edges = byVersion[ver]
+        const subFlows = {}
+        edges.forEach(e => {
+          const fromSub = e.from.slice(0, 4)
+          const toSub = e.to.slice(0, 4)
+          if (fromSub === toSub) return
+          const key = `${fromSub}→${toSub}`
+          if (!subFlows[key]) subFlows[key] = { fromSub, toSub, edges: [] }
+          subFlows[key].edges.push(e)
+        })
+        const flowEntries = Object.entries(subFlows)
+        if (flowEntries.length === 0) return null
+
+        const isOutgoing = flowEntries.some(([, sf]) => sf.fromSub === originSub)
+        const isIncoming = flowEntries.some(([, sf]) => sf.toSub === originSub)
+        const dotClass = isOutgoing && isIncoming ? 'both' : isOutgoing ? 'out' : 'in'
+
+        return (
+          <div key={ver} className="tl-version">
+            <div className={`tl-dot ${dotClass}`} />
+            <div className="tl-content">
+              <div className="tl-ver-label">{ver}</div>
+              {flowEntries.map(([key, sf]) => {
+                const sectionKey = `${ver}|${key}`
+                const isOpen = expandedSections[sectionKey]
+                const isOut = sf.fromSub === originSub
+                return (
+                  <div key={key} className="tl-flow-row">
+                    <div className="tl-flow-summary" onClick={() => toggleSection(sectionKey)}>
+                      <span className={`tl-direction ${isOut ? 'out' : 'in'}`}>{isOut ? '→' : '←'}</span>
+                      <span className="flow-sub-chip" style={{ borderColor: subColors[sf.fromSub], color: subColors[sf.fromSub] }}
+                            onClick={e => { e.stopPropagation(); onSearch(sf.fromSub) }}>{sf.fromSub}</span>
+                      <span className="tl-arrow">→</span>
+                      <span className="flow-sub-chip" style={{ borderColor: subColors[sf.toSub], color: subColors[sf.toSub] }}
+                            onClick={e => { e.stopPropagation(); onSearch(sf.toSub) }}>{sf.toSub}</span>
+                      <span className="tl-count">{sf.edges.length} 筆</span>
+                      <span className={`flow-sub-toggle ${isOpen ? 'open' : ''}`}>▸</span>
                     </div>
-                  ))}
-                  {el.groups.length > 8 && <div className="tree-detail-more">...還有 {el.groups.length - 8} 筆</div>}
-                </div>
-              </foreignObject>
-            )
-          }
-          return null
-        })}
-      </svg>
+                    {isOpen && (
+                      <table className="move-table flow-detail-table">
+                        <thead><tr><th>原始組號</th><th>移入目的地</th></tr></thead>
+                        <tbody>
+                          {sf.edges.map((e, i) => (
+                            <tr key={i}>
+                              <td className="code-cell"><span className="code-link" onClick={() => onSearch(e.from)}>{e.from}</span></td>
+                              <td className="code-cell"><span className="code-link" onClick={() => onSearch(e.to)}>{e.to}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -1122,15 +987,23 @@ function FlowChart({ code, flowGraph, data, onSearch, onBack }) {
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <div className="sankey-toggle">
             <button className={`toggle-btn ${flowView === 'list' ? 'active' : ''}`} onClick={() => setFlowView('list')}>列表</button>
-            <button className={`toggle-btn ${flowView === 'tree' ? 'active' : ''}`} onClick={() => setFlowView('tree')}>樹狀圖</button>
+            <button className={`toggle-btn ${flowView === 'tree' ? 'active' : ''}`} onClick={() => setFlowView('tree')}>時間軸</button>
           </div>
           <button className="flow-back-btn" onClick={onBack}>← 返回</button>
         </div>
       </div>
 
-      {flowView === 'tree' ? (
-        <TreeChart code={code} flowGraph={flowGraph} data={data} onSearch={onSearch} />
-      ) : null}
+      {flowView === 'tree' && (
+        <TimelineChart
+          sortedVersions={sortedVersions}
+          byVersion={byVersion}
+          originSub={originSub}
+          subColors={subColors}
+          expandedSections={expandedSections}
+          toggleSection={toggleSection}
+          onSearch={onSearch}
+        />
+      )}
 
       {flowView === 'list' && sortedVersions.map(ver => {
         const edges = byVersion[ver]
