@@ -1273,6 +1273,18 @@ export default function App() {
       .catch(e => { setError(e.message); setLoading(false) })
   }, [])
 
+  // Build set of subclasses that have records in the selected version
+  const versionFilteredSubs = useMemo(() => {
+    if (!data || !selectedVersion) return null
+    const subs = new Set()
+    Object.entries(data.subclass_index).forEach(([sub, entry]) => {
+      const hasDonated = (entry.donated || []).some(r => r.version === selectedVersion)
+      const hasReceived = (entry.received || []).some(r => r.version === selectedVersion)
+      if (hasDonated || hasReceived) subs.add(sub)
+    })
+    return subs
+  }, [data, selectedVersion])
+
   useEffect(() => {
     if (!data || !groupIndex || input.length < 1) {
       setSuggestions([])
@@ -1283,11 +1295,12 @@ export default function App() {
     if (isGroupQuery(up)) {
       // Group-level autocomplete
       const normalized = normalizeGroupQuery(up)
-      const matches = Object.keys(groupIndex)
+      let matches = Object.keys(groupIndex)
         .filter(k => k.startsWith(normalized))
-        .sort()
-        .slice(0, 10)
-      setSuggestions(matches)
+      if (versionFilteredSubs) {
+        matches = matches.filter(k => versionFilteredSubs.has(k.slice(0, 4)))
+      }
+      setSuggestions(matches.sort().slice(0, 10))
     } else {
       // Subclass-level autocomplete (include introduced_in and deprecated_to codes)
       const allSubs = new Set([
@@ -1295,11 +1308,14 @@ export default function App() {
         ...Object.keys(data.introduced_in || {}),
         ...Object.keys(data.deprecated_to || {})
       ])
-      const all = [...allSubs].sort()
+      let all = [...allSubs].sort()
+      if (versionFilteredSubs) {
+        all = all.filter(k => versionFilteredSubs.has(k))
+      }
       const matches = all.filter(k => k.startsWith(up)).slice(0, 10)
       setSuggestions(matches)
     }
-  }, [input, data, groupIndex])
+  }, [input, data, groupIndex, versionFilteredSubs])
 
   useEffect(() => {
     function handleClick(e) {
