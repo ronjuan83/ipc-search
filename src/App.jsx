@@ -776,20 +776,161 @@ function traceSubclassFlow(subclass, flowGraph, subclass_index) {
   return { nodes: [...allNodes.values()], edges: uniqueEdges }
 }
 
-// Parse version string "1995.01→2000.01" into the target version for ordering
+// ── Sankey Diagram ──
+
 function versionOrder(verStr) {
   const m = verStr.match(/(\d{4})\.(\d{2})→(\d{4})\.(\d{2})/)
   if (m) return parseInt(m[3]) * 100 + parseInt(m[4])
   return 0
 }
 
+// Aggregate group-level flow into subclass-level: collapse codes to 4-char prefix
+function aggregateToSubclass(flow, originCode) {
+  const originSub = originCode.slice(0, 4)
+  const edgeMap = {} // "version|fromSub|toSub" → weight
+  flow.edges.forEach(e => {
+    const fromSub = e.from.slice(0, 4)
+    const toSub = e.to.slice(0, 4)
+    if (fromSub === toSub) return // skip self-loops within same subclass
+    const key = `${e.version}|${fromSub}|${toSub}`
+    edgeMap[key] = (edgeMap[key] || 0) + 1
+  })
+  const aggEdges = Object.entries(edgeMap).map(([key, weight]) => {
+    const [version, from, to] = key.split('|')
+    return { from, to, version, weight }
+  })
+  const nodeSet = new Set()
+  aggEdges.forEach(e => { nodeSet.add(e.from); nodeSet.add(e.to) })
+  return {
+    nodes: [...nodeSet].map(code => ({ code, direction: code === originSub ? 'origin' : 'other' })),
+    edges: aggEdges
+  }
+}
+
+// Compute Sankey layout: positions nodes in version columns, generates SVG paths
+function computeSankeyLayout(flow, originCode) {
+  const COL_WIDTH = 160
+  const COL_GAP = 80
+  const NODE_PAD = 8
+  const MIN_NODE_H = 28
+  const TOP_PAD = 40
+
+  // 1. Assign columns by version
+  const versions = [...new Set(flow.edges.map(e => e.version))]
+    .sort((a, b) => versionOrder(a) - versionOrder(b))
+  const verToCol = {}
+  versions.forEach((v, i) => { verToCol[v] = i })
+  const numCols = versions.length
+
+  // 2. Assign each node to one or more columns
+  // Source nodes → left column of their version, target nodes → right column
+  // A node can appear in multiple columns if it participates in multiple versions
+  const nodeInstances = [] // {id, code, col, weight}
+  const nodeMap = {} // "code@col" → instance index
+
+  function getOrCreateNode(code, col) {
+    const key = `${code}@${col}`
+    if (nodeMap[key] !== undefined) return nodeMap[key]
+    const idx = nodeInstances.length
+    nodeMap[key] = idx
+    nodeInstances.push({ id: idx, code, col, weightOut: 0, weightIn: 0 })
+    return idx
+  }
+
+  // For each edge, place source in col*2 (left), target in col*2+1 (right)
+  const layoutEdges = []
+  flow.edges.forEach(e => {
+    const col = verToCol[e.version]
+    const srcIdx = getOrCreateNode(e.from, col * 2)
+    const tgtIdx = getOrCreateNode(e.to, col * 2 + 1)
+    const w = e.weight || 1
+    nodeInstances[srcIdx].weightOut += w
+    nodeInstances[tgtIdx].weightIn += w
+    layoutEdges.push({ src: srcIdx, tgt: tgtIdx, weight: w, version: e.version })
+  })
+
+  // 3. Group nodes by column
+  const columns = {}
+  nodeInstances.forEach((n, i) => {
+    if (!columns[n.col]) columns[n.col] = []
+    columns[n.col].push(i)
+  })
+
+  // 4. Sort nodes within each column (origin code first, then alphabetically)
+  const originSub = originCode.slice(0, 4)
+  Object.values(columns).forEach(col => {
+    col.sort((a, b) => {
+      const na = nodeInstances[a], nb = nodeInstances[b]
+      const aIsOrigin = na.code.startsWith(originSub) ? 0 : 1
+      const bIsOrigin = nb.code.startsWith(originSub) ? 0 : 1
+      if (aIsOrigin !== bIsOrigin) return aIsOrigin - bIsOrigin
+      return na.code.localeCompare(nb.code)
+    })
+  })
+
+  // 5. Position nodes vertically
+  const maxWeight = Math.max(...nodeInstances.map(n => Math.max(n.weightOut, n.weightIn, 1)))
+  const colKeys = Object.keys(columns).map(Number).sort((a, b) => a - b)
+
+  colKeys.forEach(colIdx => {
+    const nodesInCol = columns[colIdx]
+    let y = TOP_PAD
+    nodesInCol.forEach(ni => {
+      const n = nodeInstances[ni]
+      const w = Math.max(n.weightOut, n.weightIn, 1)
+      const h = Math.max(MIN_NODE_H, Math.round((w / maxWeight) * 60) + MIN_NODE_H)
+      n.x = colIdx * ((COL_WIDTH + COL_GAP) / 2)
+      n.y = y
+      n.h = h
+      n.w = COL_WIDTH / 2 - 10
+      y += h + NODE_PAD
+    })
+  })
+
+  // 6. Track port positions for links (so they stack without overlap)
+  const portOut = {} // nodeIdx → next available y offset for outgoing
+  const portIn = {}  // nodeIdx → next available y offset for incoming
+  nodeInstances.forEach((_, i) => { portOut[i] = 0; portIn[i] = 0 })
+
+  // 7. Generate bezier paths for each edge
+  const paths = layoutEdges.map(e => {
+    const src = nodeInstances[e.src]
+    const tgt = nodeInstances[e.tgt]
+    const totalOut = Math.max(src.weightOut, 1)
+    const totalIn = Math.max(tgt.weightIn, 1)
+    const thickness = Math.max(2, Math.min((e.weight / Math.max(maxWeight, 1)) * 30, 20))
+
+    const x0 = src.x + src.w
+    const y0 = src.y + (portOut[e.src] / totalOut) * src.h + thickness / 2
+    portOut[e.src] += e.weight
+
+    const x1 = tgt.x
+    const y1 = tgt.y + (portIn[e.tgt] / totalIn) * tgt.h + thickness / 2
+    portIn[e.tgt] += e.weight
+
+    const cx = (x0 + x1) / 2
+    const d = `M${x0},${y0} C${cx},${y0} ${cx},${y1} ${x1},${y1}`
+
+    return { d, thickness, src: e.src, tgt: e.tgt, weight: e.weight, version: e.version }
+  })
+
+  // 8. Compute total dimensions
+  const totalW = (colKeys.length > 0 ? (Math.max(...colKeys) + 1) * ((COL_WIDTH + COL_GAP) / 2) + COL_WIDTH / 2 : 300)
+  const totalH = Math.max(...nodeInstances.map(n => n.y + n.h), 100) + TOP_PAD
+
+  return { nodes: nodeInstances, paths, versions, verToCol, totalW, totalH, COL_WIDTH, COL_GAP }
+}
+
 function FlowChart({ code, flowGraph, data, onSearch, onBack }) {
   const isSubclass = /^[A-H]\d{2}[A-Z]$/.test(code)
-  const flow = isSubclass
+  const rawFlow = isSubclass
     ? traceSubclassFlow(code, flowGraph, data.subclass_index)
     : traceFlow(code, flowGraph)
 
-  if (flow.edges.length === 0) {
+  const [viewMode, setViewMode] = useState(rawFlow.edges.length > 50 ? 'subclass' : 'group')
+  const [hoverNode, setHoverNode] = useState(null)
+
+  if (rawFlow.edges.length === 0) {
     return (
       <div className="subclass-card">
         <div className="card-header">
@@ -801,22 +942,32 @@ function FlowChart({ code, flowGraph, data, onSearch, onBack }) {
     )
   }
 
-  // Group edges by version, sorted chronologically
-  const byVersion = {}
-  flow.edges.forEach(e => {
-    if (!byVersion[e.version]) byVersion[e.version] = []
-    byVersion[e.version].push(e)
-  })
-  const sortedVersions = Object.keys(byVersion).sort((a, b) => versionOrder(a) - versionOrder(b))
+  const flow = viewMode === 'subclass' ? aggregateToSubclass(rawFlow, code) : rawFlow
+  const layout = computeSankeyLayout(flow, code)
 
-  // Collect unique subclasses for color coding
-  const subclasses = new Set()
-  flow.nodes.forEach(n => subclasses.add(n.code.slice(0, 4)))
-
-  const subColors = {}
+  // Color palette by subclass
+  const subSet = new Set()
+  layout.nodes.forEach(n => subSet.add(n.code.slice(0, 4)))
   const palette = ['#0d6efd', '#dc3545', '#198754', '#6f42c1', '#fd7e14', '#20c997', '#e83e8c', '#6610f2', '#ffc107', '#17a2b8']
+  const subColors = {}
   let ci = 0
-  subclasses.forEach(s => { subColors[s] = palette[ci++ % palette.length] })
+  ;[...subSet].sort().forEach(s => { subColors[s] = palette[ci++ % palette.length] })
+
+  // Which nodes are connected to hovered node?
+  const connectedNodes = new Set()
+  const connectedPaths = new Set()
+  if (hoverNode !== null) {
+    connectedNodes.add(hoverNode)
+    layout.paths.forEach((p, i) => {
+      if (p.src === hoverNode || p.tgt === hoverNode) {
+        connectedNodes.add(p.src)
+        connectedNodes.add(p.tgt)
+        connectedPaths.add(i)
+      }
+    })
+  }
+
+  const hasHover = hoverNode !== null
 
   return (
     <div className="subclass-card flow-card">
@@ -829,50 +980,88 @@ function FlowChart({ code, flowGraph, data, onSearch, onBack }) {
             </span>
           )}
         </div>
-        <button className="flow-back-btn" onClick={onBack}>← 返回</button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div className="sankey-toggle">
+            <button className={`toggle-btn ${viewMode === 'group' ? 'active' : ''}`} onClick={() => setViewMode('group')}>組號</button>
+            <button className={`toggle-btn ${viewMode === 'subclass' ? 'active' : ''}`} onClick={() => setViewMode('subclass')}>分類</button>
+          </div>
+          <button className="flow-back-btn" onClick={onBack}>← 返回</button>
+        </div>
       </div>
 
       <div className="flow-legend">
-        {[...subclasses].map(s => (
+        {[...subSet].sort().map(s => (
           <span key={s} className="flow-legend-item" style={{ borderColor: subColors[s], color: subColors[s] }}>
             {s}{getSubclassName(s) ? ` ${getSubclassName(s)}` : ''}
           </span>
         ))}
       </div>
 
-      <div className="flow-timeline-wrap">
-        <div className="flow-timeline">
-          {sortedVersions.map(ver => (
-            <div key={ver} className="flow-version-col">
-              <div className="flow-version-header">{ver}</div>
-              <div className="flow-edges">
-                {byVersion[ver].map((e, i) => (
-                  <div key={i} className="flow-edge">
-                    <span
-                      className="flow-node"
-                      style={{ borderLeftColor: subColors[e.from.slice(0, 4)] }}
-                      onClick={() => onSearch(e.from)}
-                    >
-                      {e.from}
-                    </span>
-                    <span className="flow-arrow">→</span>
-                    <span
-                      className="flow-node"
-                      style={{ borderLeftColor: subColors[e.to.slice(0, 4)] }}
-                      onClick={() => onSearch(e.to)}
-                    >
-                      {e.to}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+      <div className="sankey-wrap">
+        <svg
+          className="sankey-svg"
+          width={layout.totalW}
+          height={layout.totalH}
+          viewBox={`0 0 ${layout.totalW} ${layout.totalH}`}
+        >
+          {/* Version column headers */}
+          {layout.versions.map((ver, i) => {
+            const col = layout.verToCol[ver]
+            const x = col * 2 * ((layout.COL_WIDTH + layout.COL_GAP) / 2)
+            return (
+              <text key={ver} x={x + layout.COL_WIDTH / 2} y={16} textAnchor="middle" className="sankey-ver-label">
+                {ver}
+              </text>
+            )
+          })}
+
+          {/* Links */}
+          {layout.paths.map((p, i) => {
+            const fromSub = layout.nodes[p.src].code.slice(0, 4)
+            const opacity = hasHover ? (connectedPaths.has(i) ? 0.6 : 0.08) : 0.35
+            return (
+              <path
+                key={i}
+                d={p.d}
+                fill="none"
+                stroke={subColors[fromSub] || '#999'}
+                strokeWidth={p.thickness}
+                opacity={opacity}
+                className="sankey-link"
+              >
+                <title>{layout.nodes[p.src].code} → {layout.nodes[p.tgt].code} ({p.weight})</title>
+              </path>
+            )
+          })}
+
+          {/* Nodes */}
+          {layout.nodes.map((n, i) => {
+            const color = subColors[n.code.slice(0, 4)] || '#999'
+            const opacity = hasHover ? (connectedNodes.has(i) ? 1 : 0.2) : 1
+            return (
+              <g
+                key={i}
+                className="sankey-node"
+                opacity={opacity}
+                onMouseEnter={() => setHoverNode(i)}
+                onMouseLeave={() => setHoverNode(null)}
+                onClick={() => onSearch(n.code)}
+                style={{ cursor: 'pointer' }}
+              >
+                <rect x={n.x} y={n.y} width={n.w} height={n.h} rx={4} fill={color} opacity={0.15} stroke={color} strokeWidth={1.5} />
+                <text x={n.x + n.w / 2} y={n.y + n.h / 2 + 4} textAnchor="middle" className="sankey-node-label" fill={color}>
+                  {n.code}
+                </text>
+                <title>{n.code}{getSubclassName(n.code.slice(0, 4)) ? ' ' + getSubclassName(n.code.slice(0, 4)) : ''}</title>
+              </g>
+            )
+          })}
+        </svg>
       </div>
 
       <div className="flow-stats">
-        共 {flow.nodes.length} 個節點、{flow.edges.length} 筆異動、橫跨 {sortedVersions.length} 個版本
+        共 {flow.nodes.length} 個節點、{flow.edges.length} 筆異動、橫跨 {layout.versions.length} 個版本
+        {viewMode === 'subclass' && '（分類彙總檢視）'}
       </div>
     </div>
   )
