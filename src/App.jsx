@@ -1080,9 +1080,17 @@ function FlowChart({ code, flowGraph, data, onSearch, onBack }) {
     )
   }
 
+  // Filter edges: only keep those directly involving the searched code's subclass
+  const originSub = code.slice(0, 4)
+  const relevantEdges = rawFlow.edges.filter(e => {
+    const fromSub = e.from.slice(0, 4)
+    const toSub = e.to.slice(0, 4)
+    return fromSub === originSub || toSub === originSub
+  })
+
   // Group edges by version, then by (fromSub → toSub)
   const byVersion = {}
-  rawFlow.edges.forEach(e => {
+  relevantEdges.forEach(e => {
     if (!byVersion[e.version]) byVersion[e.version] = []
     byVersion[e.version].push(e)
   })
@@ -1194,7 +1202,7 @@ function FlowChart({ code, flowGraph, data, onSearch, onBack }) {
 
       {flowView === 'list' && (
         <div className="flow-stats">
-          共 {rawFlow.edges.length} 筆異動、橫跨 {sortedVersions.length} 個版本、涉及 {allSubs.size} 個分類
+          共 {relevantEdges.length} 筆異動、橫跨 {sortedVersions.length} 個版本、涉及 {allSubs.size} 個分類
         </div>
       )}
     </div>
