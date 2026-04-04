@@ -718,6 +718,101 @@ body {
   text-align: center;
 }
 
+/* ── Toggle buttons (shared) ── */
+.sankey-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.toggle-btn {
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: none;
+  background: var(--card-bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+}
+.toggle-btn.active {
+  background: var(--primary);
+  color: #fff;
+}
+.toggle-btn:not(.active):hover {
+  background: var(--version-bg);
+}
+
+/* ── Tree Chart ── */
+.tree-chart-wrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  padding: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+.tree-chart-svg {
+  display: block;
+}
+.tree-ver-label {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  fill: var(--version-color);
+}
+.tree-node:hover rect {
+  opacity: 0.25 !important;
+}
+.tree-node-label {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  pointer-events: none;
+}
+.tree-link {
+  transition: opacity 0.15s;
+}
+.tree-link-group:hover .tree-link {
+  opacity: 0.7 !important;
+  stroke-width: 4 !important;
+}
+.tree-link-count {
+  font-size: 9px;
+  font-weight: 600;
+  fill: var(--text-muted);
+  pointer-events: none;
+}
+.tree-detail-box {
+  background: var(--card-bg);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  box-shadow: var(--shadow);
+}
+.tree-detail-header {
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.tree-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+.tree-detail-arrow {
+  color: var(--text-light);
+  font-size: 11px;
+}
+.tree-detail-more {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding-top: 2px;
+}
+
 /* ── Mobile ── */
 @media (max-width: 600px) {
   .app-title { font-size: 1.4rem; }
