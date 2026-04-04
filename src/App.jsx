@@ -1,91 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
 
-// Known subclass descriptions (partial — covers commonly searched ones)
-const SUBCLASS_NAMES = {
-  A01B: '農業；土壤耕作',
-  A01C: '種植；播種；施肥',
-  A01D: '收割；割草',
-  A01F: '農產品加工；脫穀',
-  A01G: '園藝；蔬菜、花卉、稻米、果樹、葡萄栽培',
-  A01H: '植物新品種',
-  A01K: '畜牧業；捕魚；誘捕',
-  A01L: '蹄鐵',
-  A01M: '病蟲害防治',
-  A01N: '殺蟲劑；除草劑',
-  A61B: '診斷；手術；識別',
-  A61C: '牙科',
-  A61F: '可植入血管的濾器；假體；矯形器',
-  A61K: '醫用製劑',
-  A61L: '材料或物品滅菌',
-  A61M: '將介質引入人體或從人體取出',
-  A61N: '電療法；磁療法；放射療法',
-  A61P: '化合物或藥物製劑的治療活性',
-  B01D: '分離',
-  B01J: '化學或物理過程；催化劑',
-  B02C: '碎裂、研磨或粉碎',
-  B21D: '金屬板材的加工',
-  B22F: '金屬粉末的加工',
-  B23K: '焊接；釺焊或脫焊',
-  B29B: '橡膠或塑膠的預處理',
-  B29C: '橡膠或塑膠的成型加工',
-  B29D: '由橡膠或塑膠製造特定形狀製品',
-  B32B: '層狀產品',
-  B41J: '打字機；選擇性印刷',
-  B60L: '電動車輛的電氣設備',
-  B60W: '混合動力車輛',
-  B62D: '機動車輛；拖車',
-  B81B: '微結構裝置或系統',
-  B81C: '微結構裝置或系統的製造或處理',
-  C01B: '非金屬元素；無機化合物',
-  C01G: '含金屬元素的化合物',
-  C07D: '雜環化合物',
-  C08F: '高分子化合物：含碳-碳不飽和鍵的單體聚合物',
-  C08G: '高分子化合物：其他聚合物',
-  C08L: '高分子化合物的組合物',
-  C09K: '各種用途的材料',
-  C10L: '燃料；潤滑油',
-  C12N: '微生物或酶；組合物',
-  C12Q: '包含酶或微生物的測量或測試',
-  C22C: '合金',
-  C23C: '對金屬材料的塗覆',
-  C23F: '非機械法去除金屬材料',
-  C30B: '單晶生長',
-  C40B: '組合化學技術',
-  E01D: '橋樑',
-  E04G: '脚手架；模板；支柱',
-  E21B: '地層鑽探；採礦',
-  F02M: '向燃燒發動機供給燃料',
-  F24J: '其他產熱或使用熱的方法和設備',
-  F24S: '太陽能集熱器',
-  G01C: '測量距離、水準或方位',
-  G01N: '調查或分析材料的物理或化學性質',
-  G01S: '無線電定向；無線電導航',
-  G06C: '數字計算機（機械型）',
-  G06E: '光學計算機',
-  G06F: '電數字數據處理',
-  G06G: '類比計算機',
-  G06K: '圖形數據的讀取；數據呈現；記錄載體',
-  G06N: '基於特定計算模型的計算方案',
-  G06Q: '數據處理系統或方法（行政、商業、金融、管理）',
-  G06T: '一般圖像數據處理或生成',
-  G06V: '圖像或視頻識別或理解',
-  G11B: '基於記錄載體與換能器之間相對運動的信息存儲',
-  G11C: '靜態存儲器',
-  H01L: '半導體器件',
-  H01M: '電池；燃料電池；儲氫',
-  H01Q: '天線',
-  H01R: '電連接器',
-  H01S: '利用激光或激射原理的器件',
-  H02J: '供電或配電的電路裝置',
-  H02M: '電力轉換裝置',
-  H04B: '傳輸',
-  H04L: '數字信息的傳輸',
-  H04N: '圖像通信',
-  H04W: '無線通信網絡',
-  H10B: '半導體存儲器件',
-  H10K: '有機電子器件',
-}
+// Subclass names — loaded dynamically from ipc_names.json
+let SUBCLASS_NAMES = {}
 
 function getSubclassName(code) {
   return SUBCLASS_NAMES[code] || ''
@@ -807,28 +724,26 @@ function aggregateToSubclass(flow, originCode) {
   }
 }
 
-// Compute Sankey layout: positions nodes in version columns, generates SVG paths
+// Compute Sankey layout with ribbon-style links
 function computeSankeyLayout(flow, originCode) {
-  const COL_WIDTH = 160
-  const COL_GAP = 80
-  const NODE_PAD = 8
-  const MIN_NODE_H = 28
-  const TOP_PAD = 40
+  const NODE_W = 70
+  const COL_SPACING = 220  // center-to-center distance between src and tgt columns
+  const VER_GAP = 60       // gap between version pairs
+  const NODE_PAD = 6
+  const MIN_NODE_H = 22
+  const TOP_PAD = 36
+  const PX_PER_WEIGHT = 6  // pixels per unit of weight for node height
 
-  // 1. Assign columns by version
+  // 1. Versions → column pairs
   const versions = [...new Set(flow.edges.map(e => e.version))]
     .sort((a, b) => versionOrder(a) - versionOrder(b))
   const verToCol = {}
   versions.forEach((v, i) => { verToCol[v] = i })
-  const numCols = versions.length
 
-  // 2. Assign each node to one or more columns
-  // Source nodes → left column of their version, target nodes → right column
-  // A node can appear in multiple columns if it participates in multiple versions
-  const nodeInstances = [] // {id, code, col, weight}
-  const nodeMap = {} // "code@col" → instance index
-
-  function getOrCreateNode(code, col) {
+  // 2. Create node instances
+  const nodeInstances = []
+  const nodeMap = {}
+  function getOrCreate(code, col) {
     const key = `${code}@${col}`
     if (nodeMap[key] !== undefined) return nodeMap[key]
     const idx = nodeInstances.length
@@ -837,88 +752,112 @@ function computeSankeyLayout(flow, originCode) {
     return idx
   }
 
-  // For each edge, place source in col*2 (left), target in col*2+1 (right)
   const layoutEdges = []
   flow.edges.forEach(e => {
-    const col = verToCol[e.version]
-    const srcIdx = getOrCreateNode(e.from, col * 2)
-    const tgtIdx = getOrCreateNode(e.to, col * 2 + 1)
+    const vc = verToCol[e.version]
+    const si = getOrCreate(e.from, vc * 2)
+    const ti = getOrCreate(e.to, vc * 2 + 1)
     const w = e.weight || 1
-    nodeInstances[srcIdx].weightOut += w
-    nodeInstances[tgtIdx].weightIn += w
-    layoutEdges.push({ src: srcIdx, tgt: tgtIdx, weight: w, version: e.version })
+    nodeInstances[si].weightOut += w
+    nodeInstances[ti].weightIn += w
+    layoutEdges.push({ src: si, tgt: ti, weight: w, version: e.version })
   })
 
-  // 3. Group nodes by column
+  // 3. Group by column and sort
   const columns = {}
   nodeInstances.forEach((n, i) => {
-    if (!columns[n.col]) columns[n.col] = []
-    columns[n.col].push(i)
+    ;(columns[n.col] || (columns[n.col] = [])).push(i)
   })
-
-  // 4. Sort nodes within each column (origin code first, then alphabetically)
   const originSub = originCode.slice(0, 4)
   Object.values(columns).forEach(col => {
     col.sort((a, b) => {
       const na = nodeInstances[a], nb = nodeInstances[b]
-      const aIsOrigin = na.code.startsWith(originSub) ? 0 : 1
-      const bIsOrigin = nb.code.startsWith(originSub) ? 0 : 1
-      if (aIsOrigin !== bIsOrigin) return aIsOrigin - bIsOrigin
-      return na.code.localeCompare(nb.code)
+      const ao = na.code.startsWith(originSub) ? 0 : 1
+      const bo = nb.code.startsWith(originSub) ? 0 : 1
+      return ao !== bo ? ao - bo : na.code.localeCompare(nb.code)
     })
   })
 
-  // 5. Position nodes vertically
-  const maxWeight = Math.max(...nodeInstances.map(n => Math.max(n.weightOut, n.weightIn, 1)))
+  // 4. Size nodes: use sqrt scale so large nodes don't dominate
+  if (nodeInstances.length === 0) {
+    return { nodes: [], paths: [], versions, verToCol, totalW: 300, totalH: 100 }
+  }
+  const allWeights = nodeInstances.map(n => Math.max(n.weightOut, n.weightIn, 1))
+  const maxW = Math.max(...allWeights, 1)
+  nodeInstances.forEach(n => {
+    n.totalWeight = Math.max(n.weightOut, n.weightIn, 1)
+    const ratio = Math.sqrt(n.totalWeight / maxW)
+    n.h = Math.max(MIN_NODE_H, Math.round(ratio * 180) + MIN_NODE_H)
+    n.w = NODE_W
+  })
+
+  // 5. Position nodes: x by column, y stacked
   const colKeys = Object.keys(columns).map(Number).sort((a, b) => a - b)
+  colKeys.forEach(ci => {
+    const verIdx = Math.floor(ci / 2)
+    const isTarget = ci % 2 === 1
+    const x = verIdx * (COL_SPACING + VER_GAP) + (isTarget ? COL_SPACING - NODE_W : 0)
 
-  colKeys.forEach(colIdx => {
-    const nodesInCol = columns[colIdx]
     let y = TOP_PAD
-    nodesInCol.forEach(ni => {
+    columns[ci].forEach(ni => {
       const n = nodeInstances[ni]
-      const w = Math.max(n.weightOut, n.weightIn, 1)
-      const h = Math.max(MIN_NODE_H, Math.round((w / maxWeight) * 60) + MIN_NODE_H)
-      n.x = colIdx * ((COL_WIDTH + COL_GAP) / 2)
+      n.x = x
       n.y = y
-      n.h = h
-      n.w = COL_WIDTH / 2 - 10
-      y += h + NODE_PAD
+      y += n.h + NODE_PAD
     })
   })
 
-  // 6. Track port positions for links (so they stack without overlap)
-  const portOut = {} // nodeIdx → next available y offset for outgoing
-  const portIn = {}  // nodeIdx → next available y offset for incoming
+  // 6. Build ribbon paths — each link is a filled shape, not a stroked line
+  // Track how much of each node's height has been used for outgoing/incoming ports
+  const portOut = {}; const portIn = {}
   nodeInstances.forEach((_, i) => { portOut[i] = 0; portIn[i] = 0 })
 
-  // 7. Generate bezier paths for each edge
+  // Sort edges so largest ribbons are drawn first (painter's algorithm)
+  layoutEdges.sort((a, b) => b.weight - a.weight)
+
   const paths = layoutEdges.map(e => {
     const src = nodeInstances[e.src]
     const tgt = nodeInstances[e.tgt]
-    const totalOut = Math.max(src.weightOut, 1)
-    const totalIn = Math.max(tgt.weightIn, 1)
-    const thickness = Math.max(2, Math.min((e.weight / Math.max(maxWeight, 1)) * 30, 20))
 
+    // Ribbon thickness proportional to weight, relative to the node
+    const srcH = (e.weight / Math.max(src.weightOut, 1)) * src.h
+    const tgtH = (e.weight / Math.max(tgt.weightIn, 1)) * tgt.h
+    const thickness = Math.max(srcH, tgtH)
+
+    // Source port: top edge of unused space on right side of src node
+    const sy0 = src.y + portOut[e.src]
+    const sy1 = sy0 + srcH
+    portOut[e.src] += srcH
+
+    // Target port: top edge of unused space on left side of tgt node
+    const ty0 = tgt.y + portIn[e.tgt]
+    const ty1 = ty0 + tgtH
+    portIn[e.tgt] += tgtH
+
+    // Control point x for bezier curves
     const x0 = src.x + src.w
-    const y0 = src.y + (portOut[e.src] / totalOut) * src.h + thickness / 2
-    portOut[e.src] += e.weight
-
     const x1 = tgt.x
-    const y1 = tgt.y + (portIn[e.tgt] / totalIn) * tgt.h + thickness / 2
-    portIn[e.tgt] += e.weight
-
     const cx = (x0 + x1) / 2
-    const d = `M${x0},${y0} C${cx},${y0} ${cx},${y1} ${x1},${y1}`
+
+    // Ribbon: two bezier curves forming a filled shape
+    const d = [
+      `M${x0},${sy0}`,
+      `C${cx},${sy0} ${cx},${ty0} ${x1},${ty0}`,
+      `L${x1},${ty1}`,
+      `C${cx},${ty1} ${cx},${sy1} ${x0},${sy1}`,
+      `Z`
+    ].join(' ')
 
     return { d, thickness, src: e.src, tgt: e.tgt, weight: e.weight, version: e.version }
   })
 
-  // 8. Compute total dimensions
-  const totalW = (colKeys.length > 0 ? (Math.max(...colKeys) + 1) * ((COL_WIDTH + COL_GAP) / 2) + COL_WIDTH / 2 : 300)
-  const totalH = Math.max(...nodeInstances.map(n => n.y + n.h), 100) + TOP_PAD
+  // 7. Dimensions
+  const allX = nodeInstances.map(n => n.x + n.w)
+  const allY = nodeInstances.map(n => n.y + n.h)
+  const totalW = Math.max(...allX, 300) + 20
+  const totalH = Math.max(...allY, 100) + TOP_PAD
 
-  return { nodes: nodeInstances, paths, versions, verToCol, totalW, totalH, COL_WIDTH, COL_GAP }
+  return { nodes: nodeInstances, paths, versions, verToCol, totalW, totalH }
 }
 
 function FlowChart({ code, flowGraph, data, onSearch, onBack }) {
@@ -1007,25 +946,29 @@ function FlowChart({ code, flowGraph, data, onSearch, onBack }) {
           {/* Version column headers */}
           {layout.versions.map((ver, i) => {
             const col = layout.verToCol[ver]
-            const x = col * 2 * ((layout.COL_WIDTH + layout.COL_GAP) / 2)
+            const srcNodes = layout.nodes.filter(n => n.col === col * 2)
+            const tgtNodes = layout.nodes.filter(n => n.col === col * 2 + 1)
+            const allVer = [...srcNodes, ...tgtNodes]
+            if (allVer.length === 0) return null
+            const xMin = Math.min(...allVer.map(n => n.x))
+            const xMax = Math.max(...allVer.map(n => n.x + n.w))
             return (
-              <text key={ver} x={x + layout.COL_WIDTH / 2} y={16} textAnchor="middle" className="sankey-ver-label">
+              <text key={ver} x={(xMin + xMax) / 2} y={16} textAnchor="middle" className="sankey-ver-label">
                 {ver}
               </text>
             )
           })}
 
-          {/* Links */}
+          {/* Links — filled ribbons */}
           {layout.paths.map((p, i) => {
             const fromSub = layout.nodes[p.src].code.slice(0, 4)
-            const opacity = hasHover ? (connectedPaths.has(i) ? 0.6 : 0.08) : 0.35
+            const opacity = hasHover ? (connectedPaths.has(i) ? 0.5 : 0.05) : 0.25
             return (
               <path
                 key={i}
                 d={p.d}
-                fill="none"
-                stroke={subColors[fromSub] || '#999'}
-                strokeWidth={p.thickness}
+                fill={subColors[fromSub] || '#999'}
+                stroke="none"
                 opacity={opacity}
                 className="sankey-link"
               >
@@ -1095,10 +1038,14 @@ export default function App() {
         setGroupIndex(buildGroupIndex(d.subclass_index))
         setFlowGraph(buildFlowGraph(d.subclass_index))
         setLoading(false)
-        // Load IPC groups for range expansion (non-blocking)
+        // Load auxiliary data (non-blocking)
         fetch(`${import.meta.env.BASE_URL}ipc_groups.json`)
           .then(r => r.ok ? r.json() : null)
           .then(g => { if (g) setIpcGroups(g) })
+          .catch(() => {})
+        fetch(`${import.meta.env.BASE_URL}ipc_names.json`)
+          .then(r => r.ok ? r.json() : null)
+          .then(n => { if (n) SUBCLASS_NAMES = n })
           .catch(() => {})
       })
       .catch(e => { setError(e.message); setLoading(false) })
