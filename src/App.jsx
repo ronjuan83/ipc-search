@@ -693,16 +693,26 @@ function GroupList({ prefix, matches, groupIndex, onSelect }) {
   )
 }
 
-function PrefixList({ prefix, data, onSearch }) {
+function PrefixList({ prefix, data, onSearch, selectedVersion }) {
   // Merge all known subclass codes from subclass_index, introduced_in, and deprecated_to
   const allCodes = new Set([
     ...Object.keys(data.subclass_index),
     ...Object.keys(data.introduced_in || {}),
     ...Object.keys(data.deprecated_to || {})
   ])
-  const matches = [...allCodes]
+  let matches = [...allCodes]
     .filter(k => k.startsWith(prefix.toUpperCase()))
     .sort()
+
+  // Filter by version if selected
+  if (selectedVersion) {
+    matches = matches.filter(code => {
+      const entry = data.subclass_index[code]
+      if (!entry) return false
+      return (entry.donated || []).some(r => r.version === selectedVersion) ||
+             (entry.received || []).some(r => r.version === selectedVersion)
+    })
+  }
 
   if (matches.length === 0) {
     return <div className="no-result">找不到以「{prefix}」開頭的 IPC 分類代碼。</div>
@@ -1533,7 +1543,7 @@ export default function App() {
             <SubclassCard code={result.code} data={data} onSearch={handleSearch} ipcGroups={ipcGroups} flowGraph={flowGraph} selectedVersion={selectedVersion} />
           )}
           {!loading && !error && result && result.type === 'prefix' && (
-            <PrefixList prefix={result.prefix} data={data} onSearch={handleSearch} />
+            <PrefixList prefix={result.prefix} data={data} onSearch={handleSearch} selectedVersion={selectedVersion} />
           )}
           {!loading && !error && result && result.type === 'group-exact' && (
             <GroupCard code={result.code} groupIndex={groupIndex} onSearch={handleSearch} ipcGroups={ipcGroups} />
