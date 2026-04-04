@@ -1012,9 +1012,16 @@ function FlowChart({ code, flowGraph, data, onSearch, onBack }) {
 
 const EXAMPLES = ['H01L', 'B01J', 'G06K', 'B29D', 'H10B', 'B81B', 'G06Q', 'E21B', 'F24S', 'C40B']
 
+// Read ?ipc= from URL
+function getIpcFromUrl() {
+  const params = new URLSearchParams(window.location.search)
+  return (params.get('ipc') || '').trim().toUpperCase()
+}
+
 export default function App() {
-  const [query, setQuery] = useState('')
-  const [input, setInput] = useState('')
+  const initialIpc = getIpcFromUrl()
+  const [query, setQuery] = useState(initialIpc)
+  const [input, setInput] = useState(initialIpc)
   const [data, setData] = useState(null)
   const [groupIndex, setGroupIndex] = useState(null)
   const [flowGraph, setFlowGraph] = useState(null)
@@ -1023,9 +1030,10 @@ export default function App() {
   const [error, setError] = useState(null)
   const [suggestions, setSuggestions] = useState([])
   const [showSugg, setShowSugg] = useState(false)
-  const [flowCode, setFlowCode] = useState(null) // non-null = show flow chart
+  const [flowCode, setFlowCode] = useState(null)
   const inputRef = useRef(null)
   const suggRef = useRef(null)
+  const skipPushRef = useRef(false) // avoid pushing state on popstate
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}ipc_data.json`)
@@ -1092,6 +1100,30 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
+  // Sync URL with search state
+  function pushUrl(code) {
+    if (skipPushRef.current) { skipPushRef.current = false; return }
+    const base = window.location.pathname
+    const url = code ? `${base}?ipc=${encodeURIComponent(code)}` : base
+    window.history.pushState({ ipc: code }, '', url)
+  }
+
+  // Listen for browser back/forward
+  useEffect(() => {
+    function onPopState(e) {
+      const ipc = e.state?.ipc || getIpcFromUrl()
+      skipPushRef.current = true
+      setQuery(ipc)
+      setInput(ipc)
+      setFlowCode(null)
+      setShowSugg(false)
+    }
+    window.addEventListener('popstate', onPopState)
+    // Replace initial state so back works from first search
+    window.history.replaceState({ ipc: initialIpc }, '', window.location.href)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
   function handleSearch(value) {
     const raw = (value !== undefined ? value : input).trim().toUpperCase()
     if (!raw) return
@@ -1099,7 +1131,8 @@ export default function App() {
     setQuery(v)
     setInput(v)
     setShowSugg(false)
-    setFlowCode(null) // exit flow view on new search
+    setFlowCode(null)
+    pushUrl(v)
   }
 
   function handleKeyDown(e) {
@@ -1111,6 +1144,7 @@ export default function App() {
     setInput(code)
     setQuery(code)
     setShowSugg(false)
+    pushUrl(code)
   }
 
   // Compute result
