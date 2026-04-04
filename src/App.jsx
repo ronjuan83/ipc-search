@@ -4,9 +4,19 @@ import './App.css'
 
 // Subclass names — loaded dynamically from ipc_names.json
 let SUBCLASS_NAMES = {}
+// Group titles — loaded dynamically from ipc_group_titles.json
+let GROUP_TITLES = {} // "H10B 10/00" → "Static random access memory [SRAM] devices"
 
 function getSubclassName(code) {
   return SUBCLASS_NAMES[code] || ''
+}
+
+function getGroupTitle(code) {
+  // Try exact match first, then main group (X/00)
+  if (GROUP_TITLES[code]) return GROUP_TITLES[code]
+  const parts = code.match(/([A-H]\d{2}[A-Z])\s+(\d+)\//)
+  if (parts) return GROUP_TITLES[`${parts[1]} ${parts[2]}/00`] || ''
+  return ''
 }
 
 // Match a single IPC code: subclass (H01L) or group (H01L 21/677)
@@ -103,15 +113,19 @@ function parseDst(dst) {
   return segments
 }
 
-function CodeLink({ text, onSearch }) {
+function CodeLink({ text, onSearch, showTitle }) {
+  const title = getGroupTitle(text) || getSubclassName(text.slice(0, 4))
   return (
-    <span className="code-link" onClick={() => onSearch(text)}>
-      {text}
-    </span>
+    <>
+      <span className="code-link" onClick={() => onSearch(text)} title={title || undefined}>
+        {text}
+      </span>
+      {showTitle && title && <span className="code-title-hint">{title}</span>}
+    </>
   )
 }
 
-function DstCell({ dst, onSearch, ipcGroups }) {
+function DstCell({ dst, onSearch, ipcGroups, showTitles }) {
   const segments = parseDst(dst)
   const result = []
   for (let i = 0; i < segments.length; i++) {
@@ -128,7 +142,7 @@ function DstCell({ dst, onSearch, ipcGroups }) {
               {expanded.map((code, j) => (
                 <span key={j}>
                   {j > 0 && ', '}
-                  <CodeLink text={code} onSearch={onSearch} />
+                  <CodeLink text={code} onSearch={onSearch} showTitle={showTitles} />
                 </span>
               ))}
             </span>
@@ -137,7 +151,7 @@ function DstCell({ dst, onSearch, ipcGroups }) {
           continue
         }
       }
-      result.push(<CodeLink key={i} text={seg.text} onSearch={onSearch} />)
+      result.push(<CodeLink key={i} text={seg.text} onSearch={onSearch} showTitle={showTitles} />)
     } else {
       result.push(<span key={i}>{seg.text}</span>)
     }
@@ -582,7 +596,7 @@ function GroupCard({ code, groupIndex, onSearch, ipcGroups }) {
                   {items.map((e, i) => (
                     <tr key={i}>
                       <td className="code-cell"><DstCell dst={e.record.src_group} onSearch={onSearch} ipcGroups={ipcGroups} /></td>
-                      <td className="code-cell"><DstCell dst={e.record.dst} onSearch={onSearch} /></td>
+                      <td className="code-cell"><DstCell dst={e.record.dst} onSearch={onSearch} showTitles /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -612,8 +626,8 @@ function GroupCard({ code, groupIndex, onSearch, ipcGroups }) {
                 <tbody>
                   {items.map((e, i) => (
                     <tr key={i}>
-                      <td className="code-cell"><DstCell dst={e.record.from} onSearch={onSearch} ipcGroups={ipcGroups} /></td>
-                      <td className="code-cell"><DstCell dst={e.record.dst} onSearch={onSearch} ipcGroups={ipcGroups} /></td>
+                      <td className="code-cell"><DstCell dst={e.record.from} onSearch={onSearch} ipcGroups={ipcGroups} showTitles /></td>
+                      <td className="code-cell"><DstCell dst={e.record.dst} onSearch={onSearch} ipcGroups={ipcGroups} showTitles /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -1229,6 +1243,12 @@ export default function App() {
         fetch(`${import.meta.env.BASE_URL}ipc_names.json`)
           .then(r => r.ok ? r.json() : null)
           .then(n => { if (n) SUBCLASS_NAMES = n })
+          .catch(() => {})
+        fetch(`${import.meta.env.BASE_URL}ipc_group_titles.json`)
+          .then(r => r.ok ? r.json() : null)
+          .then(arr => {
+            if (arr) arr.forEach(g => { GROUP_TITLES[g.code] = g.title })
+          })
           .catch(() => {})
       })
       .catch(e => { setError(e.message); setLoading(false) })
