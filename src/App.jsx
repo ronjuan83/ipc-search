@@ -1137,11 +1137,14 @@ function FlowChart({ code, flowGraph, data, onSearch, onBack }) {
           subFlows[key].edges.push(e)
         })
 
+        const flowEntries = Object.entries(subFlows)
+        if (flowEntries.length === 0) return null // skip empty versions
+
         return (
           <div key={ver} className="flow-ver-block">
             <div className="flow-ver-header">{ver}</div>
             <div className="flow-ver-body">
-              {Object.entries(subFlows).map(([key, sf]) => {
+              {flowEntries.map(([key, sf]) => {
                 const sectionKey = `${ver}|${key}`
                 const isOpen = expandedSections[sectionKey]
                 const fromColor = subColors[sf.fromSub] || '#999'
