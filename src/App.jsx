@@ -193,15 +193,11 @@ function buildGroupIndex(subclass_index) {
       })
     })
     ;(entry.received || []).forEach(rec => {
-      // Index by dst: extract individual codes from dst string
+      // Index by dst: extract ALL individual codes (including range endpoints)
       const dst = (rec.dst || '').trim()
-      // Only index single exact codes (not ranges)
-      dst.split(',').forEach(part => {
-        const t = part.trim().split(' - ')[0].trim()
-        if (SINGLE_RE.test(t)) {
-          if (!idx[t]) idx[t] = []
-          idx[t].push({ type: 'received', subclass, record: rec })
-        }
+      extractCodes(dst).forEach(code => {
+        if (!idx[code]) idx[code] = []
+        idx[code].push({ type: 'received', subclass, record: rec })
       })
       // Also index the from field (may be a range)
       const from = (rec.from || '').trim()
