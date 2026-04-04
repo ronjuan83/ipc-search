@@ -862,8 +862,7 @@ function FlowChart({ code, flowGraph, data, onSearch, onBack }) {
     ? traceSubclassFlow(code, flowGraph, data.subclass_index)
     : traceFlow(code, flowGraph)
 
-  const [viewMode, setViewMode] = useState(rawFlow.edges.length > 50 ? 'subclass' : 'group')
-  const [hoverNode, setHoverNode] = useState(null)
+  const [expandedSections, setExpandedSections] = useState({})
 
   if (rawFlow.edges.length === 0) {
     return (
@@ -877,32 +876,25 @@ function FlowChart({ code, flowGraph, data, onSearch, onBack }) {
     )
   }
 
-  const flow = viewMode === 'subclass' ? aggregateToSubclass(rawFlow, code) : rawFlow
-  const layout = computeSankeyLayout(flow, code)
+  // Group edges by version, then by (fromSub → toSub)
+  const byVersion = {}
+  rawFlow.edges.forEach(e => {
+    if (!byVersion[e.version]) byVersion[e.version] = []
+    byVersion[e.version].push(e)
+  })
+  const sortedVersions = Object.keys(byVersion).sort((a, b) => versionOrder(a) - versionOrder(b))
 
-  // Color palette by subclass
-  const subSet = new Set()
-  layout.nodes.forEach(n => subSet.add(n.code.slice(0, 4)))
+  // Color palette
   const palette = ['#0d6efd', '#dc3545', '#198754', '#6f42c1', '#fd7e14', '#20c997', '#e83e8c', '#6610f2', '#ffc107', '#17a2b8']
+  const allSubs = new Set()
+  rawFlow.edges.forEach(e => { allSubs.add(e.from.slice(0, 4)); allSubs.add(e.to.slice(0, 4)) })
   const subColors = {}
   let ci = 0
-  ;[...subSet].sort().forEach(s => { subColors[s] = palette[ci++ % palette.length] })
+  ;[...allSubs].sort().forEach(s => { subColors[s] = palette[ci++ % palette.length] })
 
-  // Which nodes are connected to hovered node?
-  const connectedNodes = new Set()
-  const connectedPaths = new Set()
-  if (hoverNode !== null) {
-    connectedNodes.add(hoverNode)
-    layout.paths.forEach((p, i) => {
-      if (p.src === hoverNode || p.tgt === hoverNode) {
-        connectedNodes.add(p.src)
-        connectedNodes.add(p.tgt)
-        connectedPaths.add(i)
-      }
-    })
+  function toggleSection(key) {
+    setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }))
   }
-
-  const hasHover = hoverNode !== null
 
   return (
     <div className="subclass-card flow-card">
@@ -915,92 +907,75 @@ function FlowChart({ code, flowGraph, data, onSearch, onBack }) {
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <div className="sankey-toggle">
-            <button className={`toggle-btn ${viewMode === 'group' ? 'active' : ''}`} onClick={() => setViewMode('group')}>組號</button>
-            <button className={`toggle-btn ${viewMode === 'subclass' ? 'active' : ''}`} onClick={() => setViewMode('subclass')}>分類</button>
+        <button className="flow-back-btn" onClick={onBack}>← 返回</button>
+      </div>
+
+      {sortedVersions.map(ver => {
+        const edges = byVersion[ver]
+        // Group by fromSub → toSub
+        const subFlows = {}
+        edges.forEach(e => {
+          const fromSub = e.from.slice(0, 4)
+          const toSub = e.to.slice(0, 4)
+          const key = `${fromSub}→${toSub}`
+          if (!subFlows[key]) subFlows[key] = { fromSub, toSub, edges: [] }
+          subFlows[key].edges.push(e)
+        })
+
+        return (
+          <div key={ver} className="flow-ver-block">
+            <div className="flow-ver-header">{ver}</div>
+            <div className="flow-ver-body">
+              {Object.entries(subFlows).map(([key, sf]) => {
+                const sectionKey = `${ver}|${key}`
+                const isOpen = expandedSections[sectionKey]
+                const fromColor = subColors[sf.fromSub] || '#999'
+                const toColor = subColors[sf.toSub] || '#999'
+
+                return (
+                  <div key={key} className="flow-sub-row">
+                    <div className="flow-sub-summary" onClick={() => toggleSection(sectionKey)}>
+                      <span className="flow-sub-chip" style={{ borderColor: fromColor, color: fromColor }}
+                            onClick={e => { e.stopPropagation(); onSearch(sf.fromSub) }}>
+                        {sf.fromSub}
+                      </span>
+                      <span className="flow-sub-arrow">→</span>
+                      <span className="flow-sub-chip" style={{ borderColor: toColor, color: toColor }}
+                            onClick={e => { e.stopPropagation(); onSearch(sf.toSub) }}>
+                        {sf.toSub}
+                      </span>
+                      <span className="flow-sub-count">{sf.edges.length} 筆</span>
+                      <span className={`flow-sub-toggle ${isOpen ? 'open' : ''}`}>▸</span>
+                    </div>
+                    {isOpen && (
+                      <table className="move-table flow-detail-table">
+                        <thead>
+                          <tr><th>原始組號</th><th>移入目的地</th></tr>
+                        </thead>
+                        <tbody>
+                          {sf.edges.map((e, i) => (
+                            <tr key={i}>
+                              <td className="code-cell">
+                                <span className="code-link" onClick={() => onSearch(e.from)}>{e.from}</span>
+                              </td>
+                              <td className="code-cell">
+                                <span className="code-link" onClick={() => onSearch(e.to)}>{e.to}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
-          <button className="flow-back-btn" onClick={onBack}>← 返回</button>
-        </div>
-      </div>
-
-      <div className="flow-legend">
-        {[...subSet].sort().map(s => (
-          <span key={s} className="flow-legend-item" style={{ borderColor: subColors[s], color: subColors[s] }}>
-            {s}{getSubclassName(s) ? ` ${getSubclassName(s)}` : ''}
-          </span>
-        ))}
-      </div>
-
-      <div className="sankey-wrap">
-        <svg
-          className="sankey-svg"
-          width={layout.totalW}
-          height={layout.totalH}
-          viewBox={`0 0 ${layout.totalW} ${layout.totalH}`}
-        >
-          {/* Version column headers */}
-          {layout.versions.map((ver, i) => {
-            const col = layout.verToCol[ver]
-            const srcNodes = layout.nodes.filter(n => n.col === col * 2)
-            const tgtNodes = layout.nodes.filter(n => n.col === col * 2 + 1)
-            const allVer = [...srcNodes, ...tgtNodes]
-            if (allVer.length === 0) return null
-            const xMin = Math.min(...allVer.map(n => n.x))
-            const xMax = Math.max(...allVer.map(n => n.x + n.w))
-            return (
-              <text key={ver} x={(xMin + xMax) / 2} y={16} textAnchor="middle" className="sankey-ver-label">
-                {ver}
-              </text>
-            )
-          })}
-
-          {/* Links — filled ribbons */}
-          {layout.paths.map((p, i) => {
-            const fromSub = layout.nodes[p.src].code.slice(0, 4)
-            const opacity = hasHover ? (connectedPaths.has(i) ? 0.5 : 0.05) : 0.25
-            return (
-              <path
-                key={i}
-                d={p.d}
-                fill={subColors[fromSub] || '#999'}
-                stroke="none"
-                opacity={opacity}
-                className="sankey-link"
-              >
-                <title>{layout.nodes[p.src].code} → {layout.nodes[p.tgt].code} ({p.weight})</title>
-              </path>
-            )
-          })}
-
-          {/* Nodes */}
-          {layout.nodes.map((n, i) => {
-            const color = subColors[n.code.slice(0, 4)] || '#999'
-            const opacity = hasHover ? (connectedNodes.has(i) ? 1 : 0.2) : 1
-            return (
-              <g
-                key={i}
-                className="sankey-node"
-                opacity={opacity}
-                onMouseEnter={() => setHoverNode(i)}
-                onMouseLeave={() => setHoverNode(null)}
-                onClick={() => onSearch(n.code)}
-                style={{ cursor: 'pointer' }}
-              >
-                <rect x={n.x} y={n.y} width={n.w} height={n.h} rx={4} fill={color} opacity={0.15} stroke={color} strokeWidth={1.5} />
-                <text x={n.x + n.w / 2} y={n.y + n.h / 2 + 4} textAnchor="middle" className="sankey-node-label" fill={color}>
-                  {n.code}
-                </text>
-                <title>{n.code}{getSubclassName(n.code.slice(0, 4)) ? ' ' + getSubclassName(n.code.slice(0, 4)) : ''}</title>
-              </g>
-            )
-          })}
-        </svg>
-      </div>
+        )
+      })}
 
       <div className="flow-stats">
-        共 {flow.nodes.length} 個節點、{flow.edges.length} 筆異動、橫跨 {layout.versions.length} 個版本
-        {viewMode === 'subclass' && '（分類彙總檢視）'}
+        共 {rawFlow.edges.length} 筆異動、橫跨 {sortedVersions.length} 個版本、涉及 {allSubs.size} 個分類
       </div>
     </div>
   )

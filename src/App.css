@@ -630,62 +630,84 @@ body {
   white-space: nowrap;
 }
 
-/* ── Sankey Diagram ── */
-.sankey-toggle {
-  display: flex;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
+/* ── Flow Chart (interactive expandable) ── */
+.flow-ver-block {
+  border-bottom: 1px solid var(--border-light);
 }
-.toggle-btn {
-  padding: 4px 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border: none;
-  background: var(--card-bg);
-  color: var(--text-muted);
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.15s, color 0.15s;
+.flow-ver-block:last-child {
+  border-bottom: none;
 }
-.toggle-btn.active {
-  background: var(--primary);
-  color: #fff;
-}
-.toggle-btn:not(.active):hover {
-  background: var(--version-bg);
-}
-
-.sankey-wrap {
-  overflow-x: auto;
-  overflow-y: auto;
-  max-height: 600px;
-  padding: 8px 12px 12px;
-  -webkit-overflow-scrolling: touch;
-}
-.sankey-svg {
-  display: block;
-}
-.sankey-ver-label {
-  font-size: 10px;
+.flow-ver-header {
+  padding: 8px 20px;
+  font-size: 0.8rem;
   font-weight: 700;
   font-family: 'SF Mono', 'Fira Code', monospace;
-  fill: var(--version-color);
+  color: var(--version-color);
+  background: var(--version-bg);
+  letter-spacing: 0.02em;
 }
-.sankey-link {
-  transition: opacity 0.15s;
+.flow-ver-body {
+  padding: 4px 0;
 }
-.sankey-node {
-  transition: opacity 0.15s;
+.flow-sub-row {
+  border-bottom: 1px solid var(--border-light);
 }
-.sankey-node:hover rect {
-  opacity: 0.3 !important;
+.flow-sub-row:last-child {
+  border-bottom: none;
 }
-.sankey-node-label {
-  font-size: 10px;
-  font-weight: 600;
+.flow-sub-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.flow-sub-summary:hover {
+  background: #fafbfc;
+}
+.flow-sub-chip {
   font-family: 'SF Mono', 'Fira Code', monospace;
-  pointer-events: none;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border: 1.5px solid;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.flow-sub-chip:hover {
+  background: var(--version-bg);
+}
+.flow-sub-arrow {
+  color: var(--text-light);
+  font-size: 0.9rem;
+}
+.flow-sub-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+.flow-sub-toggle {
+  font-size: 0.7rem;
+  color: var(--text-light);
+  transition: transform 0.15s;
+}
+.flow-sub-toggle.open {
+  transform: rotate(90deg);
+}
+.flow-detail-table {
+  margin: 0 20px 8px;
+  width: calc(100% - 40px);
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.flow-detail-table th {
+  background: #fafbfc;
+}
+.flow-detail-table td {
+  font-size: 0.8rem;
 }
 
 .flow-stats {
