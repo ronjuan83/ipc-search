@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IPC 重分類分析 Demo</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #f0f2f5; color: #1a1a2e; line-height: 1.6; }
+.container { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
+.subtitle { text-align: center; color: #6c757d; margin-bottom: 32px; font-size: 0.95rem; }
+.card { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.card h2 { font-size: 1.15rem; margin-bottom: 16px; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 8px; }
+/* Stats row */
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+.stat-box { text-align: center; padding: 16px 8px; border-radius: 10px; }
+.stat-box .num { font-size: 2rem; font-weight: 700; }
+.stat-box .label { font-size: 0.78rem; color: #666; margin-top: 4px; }
+.stat-unchanged { background: #e8f5e9; } .stat-unchanged .num { color: #2e7d32; }
+.stat-auto { background: #e3f2fd; } .stat-auto .num { color: #1565c0; }
+.stat-deprecated { background: #fff3e0; } .stat-deprecated .num { color: #e65100; }
+.stat-scope { background: #fce4ec; } .stat-scope .num { color: #c62828; }
+/* Bar chart */
+.bar-chart { margin: 16px 0; }
+.bar-row { display: flex; align-items: center; margin-bottom: 8px; }
+.bar-label { width: 140px; font-size: 0.82rem; text-align: right; padding-right: 12px; color: #555; }
+.bar-track { flex: 1; height: 28px; background: #f0f0f0; border-radius: 14px; overflow: hidden; position: relative; }
+.bar-fill { height: 100%; border-radius: 14px; display: flex; align-items: center; padding-left: 12px; font-size: 0.75rem; font-weight: 600; color: #fff; transition: width 1s ease; }
+.bar-fill.unchanged { background: #4caf50; } .bar-fill.auto { background: #2196f3; }
+.bar-fill.deprecated { background: #ff9800; } .bar-fill.scope { background: #e91e63; }
+/* Interactive input */
+.try-input { display: flex; gap: 8px; margin-bottom: 16px; }
+.try-input input { flex: 1; padding: 10px 14px; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem; outline: none; transition: border 0.2s; }
+.try-input input:focus { border-color: #3498db; }
+.try-input button { padding: 10px 20px; background: #3498db; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 0.95rem; font-weight: 600; }
+.try-input button:hover { background: #2980b9; }
+/* Result card */
+.result-card { padding: 16px; border-radius: 8px; margin-top: 12px; font-size: 0.9rem; }
+.result-card.unchanged { background: #e8f5e9; border-left: 4px solid #4caf50; }
+.result-card.auto_replaced { background: #e3f2fd; border-left: 4px solid #2196f3; }
+.result-card.review_deprecated { background: #fff3e0; border-left: 4px solid #ff9800; }
+.result-card.review_scope { background: #fce4ec; border-left: 4px solid #e91e63; }
+.result-action { font-weight: 700; font-size: 1rem; margin-bottom: 4px; }
+.result-detail { color: #555; }
+/* Sample table */
+.sample-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.sample-table th { background: #f8f9fa; padding: 8px; text-align: left; border-bottom: 2px solid #dee2e6; position: sticky; top: 0; }
+.sample-table td { padding: 8px; border-bottom: 1px solid #eee; }
+.sample-table tr:hover { background: #f8f9fa; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; }
+.badge-unchanged { background: #e8f5e9; color: #2e7d32; }
+.badge-auto { background: #e3f2fd; color: #1565c0; }
+.badge-deprecated { background: #fff3e0; color: #e65100; }
+.badge-scope { background: #fce4ec; color: #c62828; }
+.scroll-box { max-height: 400px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; }
+.arrow { color: #999; margin: 0 4px; }
+.new-code { font-weight: 600; color: #1565c0; }
+/* Flow diagram */
+.flow { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 20px 0; }
+.flow-box { padding: 14px 20px; border-radius: 10px; text-align: center; min-width: 140px; }
+.flow-arrow { font-size: 1.5rem; color: #999; }
+.flow-input { background: #e8eaf6; border: 2px solid #5c6bc0; }
+.flow-process { background: #fff3e0; border: 2px solid #ff9800; }
+.flow-output { display: flex; flex-direction: column; gap: 6px; }
+.flow-out-item { padding: 8px 14px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; }
+.loading { text-align: center; padding: 40px; color: #999; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>IPC 重分類分析系統</h1>
+  <p class="subtitle">基於 WIPO IPC Concordance（1994-2026，24 版本），自動標記專利 IPC 異動狀態</p>
+
+  <!-- Flow diagram -->
+  <div class="card">
+    <h2>處理流程</h2>
+    <div class="flow">
+      <div class="flow-box flow-input">
+        <div style="font-weight:700">80 萬筆專利</div>
+        <div style="font-size:0.78rem;color:#555">IPC 代碼</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box flow-process">
+        <div style="font-weight:700">Concordance 比對</div>
+        <div style="font-size:0.78rem;color:#555">1,365 筆映射<br>17 個廢棄 subclass</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-output">
+        <div class="flow-out-item" style="background:#e8f5e9;color:#2e7d32">不需處理</div>
+        <div class="flow-out-item" style="background:#e3f2fd;color:#1565c0">自動替換</div>
+        <div class="flow-out-item" style="background:#fff3e0;color:#e65100">需人工判斷</div>
+        <div class="flow-out-item" style="background:#fce4ec;color:#c62828">需確認範圍</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="card">
+    <h2>模擬分析結果（200 筆範例資料）</h2>
+    <div class="stats-row" id="stats-row">
+      <div class="stat-box stat-unchanged"><div class="num" id="n-unchanged">-</div><div class="label">不需處理</div></div>
+      <div class="stat-box stat-auto"><div class="num" id="n-auto">-</div><div class="label">自動替換</div></div>
+      <div class="stat-box stat-deprecated"><div class="num" id="n-deprecated">-</div><div class="label">需人工判斷</div></div>
+      <div class="stat-box stat-scope"><div class="num" id="n-scope">-</div><div class="label">需確認範圍</div></div>
+    </div>
+    <div class="bar-chart" id="bar-chart"></div>
+  </div>
+
+  <!-- Interactive -->
+  <div class="card">
+    <h2>即時查詢 — 輸入 IPC 代碼</h2>
+    <div class="try-input">
+      <input type="text" id="ipc-input" placeholder="輸入 IPC 代碼，如 H01L 21/00、C13C 3/02、F24J 2/46" />
+      <button onclick="tryClassify()">分析</button>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+      <button onclick="tryExample('H01L 21/00')" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">H01L 21/00</button>
+      <button onclick="tryExample('C13C 3/02')" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">C13C 3/02</button>
+      <button onclick="tryExample('F24J 2/46')" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">F24J 2/46</button>
+      <button onclick="tryExample('G06K 9/62')" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">G06K 9/62</button>
+      <button onclick="tryExample('G06F 3/01')" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">G06F 3/01</button>
+      <button onclick="tryExample('F21H 3/00')" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">F21H 3/00</button>
+    </div>
+    <div id="result-area"></div>
+  </div>
+
+  <!-- Sample table -->
+  <div class="card">
+    <h2>範例處理結果</h2>
+    <div class="scroll-box">
+      <table class="sample-table" id="sample-table">
+        <thead><tr><th>#</th><th>原始 IPC</th><th>狀態</th><th>結果 / 建議</th><th>說明</th></tr></thead>
+        <tbody id="sample-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <p style="text-align:center;color:#999;font-size:0.78rem;margin-top:20px">
+    資料來源：WIPO IPC Concordance（IPC v6 → 2026.01）｜ <a href="./" style="color:#3498db">IPC 搜尋工具</a>
+  </p>
+</div>
+
+<script>
+// Minimal JS reclassifier (mirrors Python logic)
+let DATA = null;
+let deprecatedSingle = {}, deprecatedMulti = {}, deprecatedAt = {};
+let exactLookup = {};
+
+const IPC_RE = /^([A-H]\d{2}[A-Z])(?:\s*(\d+)\/(\S+))?$/;
+function parseIPC(code) {
+  code = code.trim().toUpperCase().replace(/\n/g,' ').replace(/\s+/g,' ');
+  const m = code.match(IPC_RE);
+  if (!m) return null;
+  return { sub: m[1], main: m[2] ? parseInt(m[2]) : null, subg: m[3] || null, group: m[2] ? `${m[1]} ${m[2]}/${m[3]}` : null };
+}
+
+function extractFirstDst(dst, srcSub) {
+  const parts = dst.split(',').map(p => p.trim());
+  for (const part of parts) {
+    const code = part.split(' - ')[0].trim();
+    if (!code) continue;
+    const p = parseIPC(code);
+    if (p && p.sub === srcSub) continue;
+    return code;
+  }
+  return parts[0]?.split(' - ')[0]?.trim() || dst;
+}
+
+function classify(code) {
+  const p = parseIPC(code);
+  if (!p) return { action: 'unchanged', original: code, detail: '' };
+
+  // Level 1: deprecated single
+  if (deprecatedSingle[p.sub]) {
+    const newSub = deprecatedSingle[p.sub];
+    const at = deprecatedAt[p.sub] || '?';
+    const newCode = p.group ? p.group.replace(p.sub, newSub) : newSub;
+    return { action: 'auto_replaced', original: code, result: newCode, detail: `${p.sub} 廢棄 → ${newSub}（${at} 版）` };
+  }
+
+  // Level 2: deprecated multi
+  if (deprecatedMulti[p.sub]) {
+    const dests = deprecatedMulti[p.sub];
+    const at = deprecatedAt[p.sub] || '?';
+    return { action: 'review_deprecated', original: code, candidates: dests.join(', '), detail: `${p.sub} 廢棄 → ${dests.join('/')}（${at} 版），需依專利內容判斷` };
+  }
+
+  // Level 3: group donation
+  if (p.group) {
+    const info = exactLookup[p.group];
+    if (info) {
+      const dst = extractFirstDst(info.dst, info.srcSub);
+      return { action: 'review_scope', original: code, possible_new: dst, detail: `${p.group} → ${dst}（${info.version}），需確認專利是否屬於移出的技術範圍` };
+    }
+    // Main group fallback
+    if (p.main !== null) {
+      const mainKey = `${p.sub} ${p.main}/00`;
+      const mainInfo = exactLookup[mainKey];
+      if (mainInfo && mainKey !== p.group) {
+        const dst = extractFirstDst(mainInfo.dst, mainInfo.srcSub);
+        return { action: 'review_scope', original: code, possible_new: dst, detail: `主組 ${mainKey} 有異動 → ${dst}（${mainInfo.version}），此子組可能受影響` };
+      }
+    }
+  }
+
+  return { action: 'unchanged', original: code, detail: '' };
+}
+
+// Load data and run demo
+const BASE = location.pathname.replace(/\/[^/]*$/, '/');
+fetch(BASE + 'ipc_data.json').then(r => r.json()).then(data => {
+  DATA = data;
+  // Build lookups
+  for (const [old, newVal] of Object.entries(data.deprecated_to || {})) {
+    if (Array.isArray(newVal)) deprecatedMulti[old] = newVal;
+    else deprecatedSingle[old] = newVal;
+  }
+  deprecatedAt = data.deprecated_at || {};
+
+  const allDonations = {};
+  for (const [sub, info] of Object.entries(data.subclass_index || {})) {
+    for (const d of (info.donated || [])) {
+      const src = (d.src_group || '').replace(/\n/g,' ').trim();
+      const dst = d.dst || '';
+      const ver = d.version || '';
+      const verKey = ver.includes('→') ? ver.split('→')[1].trim() : ver;
+      if (!src || !dst) continue;
+      if (!allDonations[src] || verKey > allDonations[src].verKey) {
+        allDonations[src] = { dst, version: ver, srcSub: sub, verKey };
+      }
+    }
+  }
+  exactLookup = allDonations;
+
+  runDemo();
+});
+
+// Generate sample patents and run analysis
+function runDemo() {
+  const sampleIPCs = [
+    'H01L 21/00','H01L 21/677','H01L 25/065','H01L 27/108','H01L 29/786','H01L 31/04','H01L 33/08',
+    'C13C 1/00','C13C 3/02','C13D 1/00','C13F 1/00',
+    'F24J 2/00','F24J 2/46','F24J 2/54',
+    'F21M 1/00','F21M 3/00','F21H 3/00','F21P 5/00',
+    'G06C 1/00','G06D 3/00','G06E 1/00',
+    'G06K 9/00','G06K 9/46','G06K 9/62','G06K 19/00',
+    'B23K 26/00','B23K 26/20','A61K 7/00','A61K 31/00',
+    'G06F 3/01','G06F 15/16','G06F 17/30','H04W 4/00','H04W 72/00',
+    'A01B 1/00','A01C 7/00','B01D 53/00','B29C 45/00','C04B 28/00',
+    'H01M 10/05','H02S 10/00','B33Y 10/00','G02B 6/00',
+    'E21B 43/00','F03D 1/00','F16K 1/00','C22C 38/00',
+  ];
+  // Pad to 200 with random unchanged codes
+  const unchanged = ['A01B 1/02','A01D 41/00','A23L 5/00','B05B 1/00','B22D 11/00','B29C 45/46',
+    'B41J 2/00','B60L 15/00','B65G 47/00','C01B 3/00','C07K 16/00','C08F 10/00',
+    'C09D 5/00','C10G 45/00','C12N 15/00','D01F 6/00','D21H 17/00','E04B 1/00',
+    'E06B 3/00','F01D 5/00','F02B 75/00','F04B 1/00','F16C 33/00','F16H 1/00',
+    'F22B 1/00','F25B 1/00','F28D 1/00','G01K 7/00','G01S 7/00','G02B 1/00',
+    'G06F 9/00','G06N 3/00','G06Q 10/00','G09C 1/00','G11B 20/00','H01B 7/00',
+    'H01C 7/00','H01F 27/00','H01Q 1/00','H01S 5/00','H02J 7/00','H02K 1/00',
+    'H02M 3/00','H02P 6/00','H04B 1/00','H04N 5/00','H04R 1/00','H04W 16/00',
+    'H05K 1/00','H10B 12/00','A42B 3/00','A43B 13/00','A47B 88/00','A47J 27/00',
+    'A61B 5/00','A61C 7/00','A61F 2/00','A61G 5/00','A61K 31/33','A61M 5/00',
+    'A61N 1/00','A62C 3/00','A63B 21/00','A63F 13/00','B01F 23/00','B01J 23/00',
+    'B02C 18/00','B03D 1/00','B04B 5/00','B05D 1/00','B06B 1/00','B07B 1/00',
+    'B08B 3/00','B09B 3/00','B21B 1/00','B21D 22/00','B21J 5/00','B23B 1/00',
+    'B23C 1/00','B23G 5/00','B23H 1/00','B23P 15/00','B24B 1/00','B24D 3/00',
+    'B25B 1/00','B25J 9/00','B26D 1/00','B27N 3/00','B28B 1/00','B28D 1/00',
+    'B29D 30/00','B30B 1/00','B31B 50/00','B32B 5/00','B41F 1/00','B42D 25/00',
+    'B60B 3/00','B60G 15/00','B60K 6/00','B60R 21/00','B60T 8/00','B60W 10/00',
+    'B61B 1/00','B62D 1/00','B62K 3/00','B62M 6/00','B63B 1/00','B63H 1/00',
+    'B64C 1/00','B64U 10/00','B65B 1/00','B65D 1/00','B66B 1/00','B66C 1/00',
+    'B66F 9/00','B67D 1/00','B81B 3/00','B81C 1/00','B82Y 10/00',
+    'C01F 17/00','C03B 5/00','C03C 3/00','C04B 28/04','C05D 1/00','C07C 29/00',
+    'C07D 213/00','C07K 1/00','C08B 1/00','C08C 1/00','C08J 5/00','C08L 23/00',
+    'C09B 1/00','C09J 7/00','C09K 5/00','C10L 1/00','C10M 101/00','C11D 1/00',
+    'C12P 7/00','C12Q 1/00','C21D 1/00','C22F 1/00','C23C 14/00','C25D 3/00',
+    'C30B 15/00','C40B 40/00',
+  ];
+  const all = [...sampleIPCs, ...unchanged].slice(0, 200);
+
+  const counts = { unchanged: 0, auto_replaced: 0, review_deprecated: 0, review_scope: 0 };
+  const results = [];
+  for (const ipc of all) {
+    const r = classify(ipc);
+    counts[r.action] = (counts[r.action] || 0) + 1;
+    results.push(r);
+  }
+
+  // Update stats
+  document.getElementById('n-unchanged').textContent = counts.unchanged;
+  document.getElementById('n-auto').textContent = counts.auto_replaced;
+  document.getElementById('n-deprecated').textContent = counts.review_deprecated;
+  document.getElementById('n-scope').textContent = counts.review_scope;
+
+  // Bar chart
+  const total = all.length;
+  const barData = [
+    { label: '不需處理', cls: 'unchanged', count: counts.unchanged },
+    { label: '自動替換', cls: 'auto', count: counts.auto_replaced },
+    { label: '需人工判斷', cls: 'deprecated', count: counts.review_deprecated },
+    { label: '需確認範圍', cls: 'scope', count: counts.review_scope },
+  ];
+  const barHtml = barData.map(b => {
+    const pct = (b.count / total * 100).toFixed(1);
+    const width = Math.max(b.count / total * 100, 2);
+    return `<div class="bar-row">
+      <div class="bar-label">${b.label}</div>
+      <div class="bar-track"><div class="bar-fill ${b.cls}" style="width:${width}%">${b.count} (${pct}%)</div></div>
+    </div>`;
+  }).join('');
+  document.getElementById('bar-chart').innerHTML = barHtml;
+
+  // Sample table (only show interesting ones first, then some unchanged)
+  const interesting = results.filter(r => r.action !== 'unchanged').slice(0, 30);
+  const unchangedSample = results.filter(r => r.action === 'unchanged').slice(0, 10);
+  const tableRows = [...interesting, ...unchangedSample];
+
+  const badgeMap = {
+    unchanged: '<span class="badge badge-unchanged">不需處理</span>',
+    auto_replaced: '<span class="badge badge-auto">自動替換</span>',
+    review_deprecated: '<span class="badge badge-deprecated">需人工判斷</span>',
+    review_scope: '<span class="badge badge-scope">需確認範圍</span>',
+  };
+
+  const tbody = document.getElementById('sample-body');
+  tbody.innerHTML = tableRows.map((r, i) => {
+    let resultCol = '';
+    if (r.action === 'auto_replaced') {
+      resultCol = `<span class="new-code">${r.result}</span>`;
+    } else if (r.action === 'review_deprecated') {
+      resultCol = `候選: <span class="new-code">${r.candidates}</span>`;
+    } else if (r.action === 'review_scope') {
+      resultCol = `可能: <span class="new-code">${r.possible_new || ''}</span>`;
+    }
+    return `<tr>
+      <td>${i + 1}</td>
+      <td><code>${r.original}</code></td>
+      <td>${badgeMap[r.action]}</td>
+      <td>${resultCol}</td>
+      <td style="font-size:0.78rem;color:#777">${r.detail || '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// Interactive
+function tryExample(code) {
+  document.getElementById('ipc-input').value = code;
+  tryClassify();
+}
+
+function tryClassify() {
+  const code = document.getElementById('ipc-input').value.trim();
+  if (!code) return;
+  const r = classify(code);
+  const area = document.getElementById('result-area');
+
+  const actionLabels = {
+    unchanged: '不需處理 — 此 IPC 代碼在所有版本中均未異動',
+    auto_replaced: '自動替換 — 原 subclass 已廢棄，有唯一對應的新代碼',
+    review_deprecated: '需人工判斷 — 原 subclass 已廢棄，有多個可能的新代碼',
+    review_scope: '需確認範圍 — 此組號的部分技術範圍已移至新位置，需看專利內容判斷',
+  };
+
+  let extra = '';
+  if (r.result) extra = `<div style="margin-top:8px">新代碼: <strong style="font-size:1.1rem">${r.result}</strong></div>`;
+  if (r.candidates) extra = `<div style="margin-top:8px">候選目的地: <strong>${r.candidates}</strong></div>`;
+  if (r.possible_new) extra = `<div style="margin-top:8px">可能的新位置: <strong>${r.possible_new}</strong></div>`;
+
+  area.innerHTML = `
+    <div class="result-card ${r.action}">
+      <div class="result-action">${actionLabels[r.action]}</div>
+      <div class="result-detail">${r.detail || '此代碼無需任何處理。'}</div>
+      ${extra}
+    </div>
+  `;
+}
+
+// Enter key
+document.getElementById('ipc-input').addEventListener('keydown', e => { if (e.key === 'Enter') tryClassify(); });
+</script>
+</body>
+</html>
