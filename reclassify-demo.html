@@ -265,6 +265,75 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
         <div style="font-size:0.7rem;color:#888">2023 年從 B64C 移入</div>
       </div>
     </div>
+    <div style="margin-top:16px">
+      <div style="font-weight:600;margin-bottom:8px;color:#2c3e50;cursor:pointer" onclick="document.getElementById('b-versions').style.display=document.getElementById('b-versions').style.display==='none'?'block':'none';this.querySelector('span').textContent=document.getElementById('b-versions').style.display==='none'?'▶':'▼'">
+        <span>▶</span> 各版本 B 部異動明細（點擊展開）
+      </div>
+      <div id="b-versions" style="display:none;font-size:0.82rem;border:1px solid #e0e0e0;border-radius:8px;max-height:500px;overflow-y:auto">
+
+        <div style="padding:12px;border-bottom:1px solid #eee">
+          <div style="font-weight:700;color:#1565c0">1995.01 → 2000.01</div>
+          <div style="color:#555;margin-top:4px">
+            <strong>MEMS 微機電獨立</strong> — 最大事件。從 H01L（半導體）、G01P（物理量測）等移入 51 筆到新建的 <a href="./?ipc=B81B" style="color:#3498db">B81B</a>/<a href="./?ipc=B81C" style="color:#3498db">B81C</a>。
+            奈米結構 <a href="./?ipc=B82B" style="color:#3498db">B82B</a> 同時新建，從 G01N 等移入 6 筆。
+          </div>
+        </div>
+
+        <div style="padding:12px;border-bottom:1px solid #eee">
+          <div style="font-weight:700;color:#1565c0">2000.01 → 2006.01</div>
+          <div style="color:#555;margin-top:4px">
+            <strong>車輛控制獨立</strong> — <a href="./?ipc=B60K" style="color:#3498db">B60K</a>（動力佈置）移出 8 筆到新建的 <a href="./?ipc=B60W" style="color:#3498db">B60W</a>（整合控制）。
+            <a href="./?ipc=B01J" style="color:#3498db">B01J</a>（催化劑）與 <a href="./?ipc=B01D" style="color:#3498db">B01D</a>（分離）互相調整 6 筆。
+            <a href="./?ipc=B02C" style="color:#3498db">B02C</a>（破碎研磨）移 2 筆到 B29B（塑膠預處理）。
+          </div>
+        </div>
+
+        <div style="padding:12px;border-bottom:1px solid #eee">
+          <div style="font-weight:700;color:#1565c0">2013.01 → 2014.01</div>
+          <div style="color:#555;margin-top:4px">
+            <strong>防偽標記歸併</strong> — <a href="./?ipc=B44F" style="color:#3498db">B44F</a>（裝飾圖案）1 筆移入 <a href="./?ipc=B42D" style="color:#3498db">B42D</a>（書籍/身分識別）。
+          </div>
+        </div>
+
+        <div style="padding:12px;border-bottom:1px solid #eee">
+          <div style="font-weight:700;color:#1565c0">2016.01 → 2017.01</div>
+          <div style="color:#555;margin-top:4px">
+            <strong>紙箱製造重組</strong> — <a href="./?ipc=B31D" style="color:#3498db">B31D</a>（其他紙製品）6 筆移入 <a href="./?ipc=B31B" style="color:#3498db">B31B</a>（紙盒/紙袋）。
+          </div>
+        </div>
+
+        <div style="padding:12px;border-bottom:1px solid #eee">
+          <div style="font-weight:700;color:#1565c0">2018.01 → 2019.01</div>
+          <div style="color:#555;margin-top:4px">
+            <strong>電動車整合</strong> — <a href="./?ipc=B60S" style="color:#3498db">B60S</a>（車輛維修）移 1 筆到 <a href="./?ipc=B60L" style="color:#3498db">B60L</a>（電動車動力）。
+          </div>
+        </div>
+
+        <div style="padding:12px;border-bottom:1px solid #eee">
+          <div style="font-weight:700;color:#1565c0">2019.01 → 2020.01</div>
+          <div style="color:#555;margin-top:4px">
+            <strong>船舶推進擴充</strong> — <a href="./?ipc=B60K" style="color:#3498db">B60K</a>、<a href="./?ipc=B64C" style="color:#3498db">B64C</a>（飛機）各移 1 筆到 <a href="./?ipc=B63H" style="color:#3498db">B63H</a>（船舶推進），反映水上交通工具電動化趨勢。
+          </div>
+        </div>
+
+        <div style="padding:12px;border-bottom:1px solid #eee;background:#fff8e1">
+          <div style="font-weight:700;color:#e65100">2021.01 → 2022.01 ⚡ 重大改版</div>
+          <div style="color:#555;margin-top:4px">
+            <strong>B01F（混合）大規模重編號</strong> — 整個 <a href="./?ipc=B01F" style="color:#3498db">B01F</a> subclass 重新編號，29 筆 group 移到新的 B01F 分組架構。
+            這是 B 部近年最大的單一變動。
+          </div>
+        </div>
+
+        <div style="padding:12px;background:#e8f5e9">
+          <div style="font-weight:700;color:#2e7d32">2022.01 → 2023.01 🛸 新增無人機</div>
+          <div style="color:#555;margin-top:4px">
+            <strong>B64U（無人機）新建</strong> — <a href="./?ipc=B64C" style="color:#3498db">B64C</a>（飛機）移出 6 筆到全新的 <a href="./?ipc=B64U" style="color:#3498db">B64U</a>（無人載具），反映無人機產業爆發。
+          </div>
+        </div>
+
+      </div>
+    </div>
+
     <div style="margin-top:12px;font-size:0.78rem;color:#666;text-align:center">
       點擊代碼可在 <a href="./?ipc=B01F" style="color:#3498db">IPC 查詢系統</a> 中查看完整異動歷史
     </div>
