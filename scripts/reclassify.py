@@ -28,13 +28,26 @@ _IPC_RE = re.compile(r'^([A-H]\d{2}[A-Z])(?:\s*(\d+)/(\S+))?$')
 def parse_ipc_code(code: str) -> dict | None:
     """拆解 IPC 代碼為 subclass / main_group / subgroup。
 
+    支援多種格式：
     >>> parse_ipc_code('H01L 21/677')
+    {'subclass': 'H01L', 'main': 21, 'sub': '677', 'group': 'H01L 21/677'}
+    >>> parse_ipc_code('H01L21/677')     # 無空格
+    {'subclass': 'H01L', 'main': 21, 'sub': '677', 'group': 'H01L 21/677'}
+    >>> parse_ipc_code('H01L 21/677(2006.01)')  # 附版本標記
     {'subclass': 'H01L', 'main': 21, 'sub': '677', 'group': 'H01L 21/677'}
     >>> parse_ipc_code('H01L')
     {'subclass': 'H01L', 'main': None, 'sub': None, 'group': None}
     """
     code = code.strip().upper().replace('\n', ' ')
     code = re.sub(r'\s+', ' ', code)
+    # Remove version/date suffix: (2006.01), [2006.01], (20060101)
+    code = re.sub(r'[\(\[]\d{4}[\.\-]?\d{0,2}[\)\]]?$', '', code).strip()
+    # Remove leading class indicator like "I:" or "N:" (TIPO format)
+    code = re.sub(r'^[A-Z]:\s*', '', code)
+    # Handle no-space format: "H01L21/677" → "H01L 21/677"
+    m2 = re.match(r'^([A-H]\d{2}[A-Z])(\d+/\S+)$', code)
+    if m2:
+        code = f"{m2.group(1)} {m2.group(2)}"
     m = _IPC_RE.match(code)
     if not m:
         return None
@@ -50,13 +63,41 @@ def parse_ipc_code(code: str) -> dict | None:
 
 
 def parse_ipc_field(value) -> list[str]:
-    """將 IPC 欄位字串拆成清單（逗號/分號/換行分隔）。"""
+    """將 IPC 欄位字串拆成清單。
+
+    支援多種分隔格式：
+      逗號: "H01L 21/677, G06F 3/01"
+      分號: "H01L 21/677; G06F 3/01"
+      換行: "H01L 21/677\\nG06F 3/01"
+      空格+subclass: "H01L 21/677 G06F 3/01"（兩個代碼間無分隔符）
+      TIPO pipe: "H01L 21/677|G06F 3/01"
+    """
     if not value or (isinstance(value, float) and str(value) == 'nan'):
         return []
     raw = str(value).strip()
     if not raw:
         return []
-    return [c.strip().upper() for c in re.split(r'[,;\n\r]+', raw) if c.strip()]
+    # Split by common delimiters
+    parts = re.split(r'[,;|\n\r]+', raw)
+    # Handle space-separated codes: "H01L 21/677 G06F 3/01"
+    # Split further if a part contains two IPC codes
+    result = []
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        # Check if part contains multiple codes (e.g., "H01L 21/677 G06F 3/01")
+        codes = re.findall(r'[A-H]\d{2}[A-Z]\s*\d+/\S+', part.upper())
+        if len(codes) > 1:
+            result.extend(c.strip() for c in codes)
+        elif codes:
+            result.append(codes[0].strip())
+        else:
+            # Might be subclass-only: "H01L"
+            sub = re.match(r'^[A-H]\d{2}[A-Z]$', part.strip().upper())
+            if sub:
+                result.append(sub.group())
+    return result
 
 
 # ── 核心分類器 ───────────────────────────────────────────────
@@ -389,6 +430,31 @@ def generate_summary(results_count: dict, total: int) -> str:
 
 def self_test(rc: IPCReclassifier):
     """內建驗證：確認已知案例的分類結果正確。"""
+    # Test parsing edge cases first
+    print("  格式解析測試：")
+    parse_tests = [
+        ('H01L21/677', 'H01L', 21, '677'),           # 無空格
+        ('H01L 21/677(2006.01)', 'H01L', 21, '677'),  # 附版本
+        ('h01l 21/677', 'H01L', 21, '677'),           # 小寫
+        ('I: H01L 21/677', 'H01L', 21, '677'),        # TIPO 前綴
+    ]
+    for raw, exp_sub, exp_main, exp_subg in parse_tests:
+        p = parse_ipc_code(raw)
+        ok = p and p['subclass'] == exp_sub and p['main'] == exp_main and p['sub'] == exp_subg
+        print(f"    {'✅' if ok else '❌'} {raw:<28} → {p['group'] if p else 'FAIL'}")
+
+    field_tests = [
+        ('H01L 21/677, G06F 3/01', 2),
+        ('H01L 21/677; G06F 3/01', 2),
+        ('H01L 21/677|G06F 3/01', 2),
+        ('H01L 21/677 G06F 3/01', 2),  # 空格分隔
+    ]
+    for raw, exp_count in field_tests:
+        codes = parse_ipc_field(raw)
+        ok = len(codes) == exp_count
+        print(f"    {'✅' if ok else '❌'} field({raw[:30]}) → {len(codes)} codes")
+
+    print("\n  分類邏輯測試：")
     tests = [
         # (input, expected_action, expected_key_value)
         ('C13C 3/02', 'auto_replaced', 'result', 'C13B 3/02'),
@@ -401,6 +467,9 @@ def self_test(rc: IPCReclassifier):
         ('H01L 33/00', 'review_scope', None, None),
         ('A01B 1/00', 'unchanged', None, None),
         ('G06F 3/01', 'unchanged', None, None),
+        # Format variants should also work
+        ('C13C3/02', 'auto_replaced', 'result', 'C13B 3/02'),       # 無空格
+        ('H01L 21/00(2006.01)', 'review_scope', None, None),        # 附版本
     ]
 
     passed = 0
