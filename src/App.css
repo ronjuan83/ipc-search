@@ -1,5 +1,6 @@
 /* ── Reset & Base ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { overflow-y: scroll; } /* 防止頁面切換時捲軸出現/消失導致 nav 跳動 */
 
 /* ── Site Nav ── */
 .site-nav {
