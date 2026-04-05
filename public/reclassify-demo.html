@@ -520,17 +520,23 @@ const BASE = location.pathname.replace(/\/[^/]*$/, '/');
 let groupTitleMap = {}; // code → {title, zh}
 let subNames = {};      // subclass → name
 
+let _titlesLoaded = false;
+let _titlesLoading = false;
+function ensureTitles() {
+  if (_titlesLoaded || _titlesLoading) return Promise.resolve();
+  _titlesLoading = true;
+  return fetch(BASE + 'ipc_group_titles.json').then(r => r.json()).then(titles => {
+    if (Array.isArray(titles)) titles.forEach(t => { groupTitleMap[t.code] = t; });
+    _titlesLoaded = true;
+  }).catch(() => { _titlesLoading = false; });
+}
+
 Promise.all([
   fetch(BASE + 'ipc_data.json').then(r => r.json()),
-  fetch(BASE + 'ipc_group_titles.json').then(r => r.json()),
   fetch(BASE + 'ipc_names.json').then(r => r.json()),
-]).then(([data, titles, names]) => {
+]).then(([data, names]) => {
   DATA = data;
   subNames = names || {};
-  // Build group title lookup
-  if (Array.isArray(titles)) {
-    titles.forEach(t => { groupTitleMap[t.code] = t; });
-  }
   for (const [old, newVal] of Object.entries(data.deprecated_to || {})) {
     if (Array.isArray(newVal)) deprecatedMulti[old] = newVal;
     else deprecatedSingle[old] = newVal;
@@ -553,6 +559,11 @@ Promise.all([
   buildTimeline(data);
   buildH01LCase(data);
   runDemo();
+  // Lazy-load group titles in background (7.8MB) after initial render
+  setTimeout(() => ensureTitles().then(() => {
+    // Re-render table with titles now available
+    applyFilter();
+  }), 100);
 });
 
 function getTitle(code) {
@@ -926,6 +937,12 @@ function tryExample(code) { document.getElementById('ipc-input').value = code; t
 function tryClassify() {
   const code = document.getElementById('ipc-input').value.trim();
   if (!code) return;
+  // Ensure titles loaded for detail display
+  ensureTitles().then(() => { _renderClassifyResult(code); });
+  // Show immediately with whatever titles are available
+  _renderClassifyResult(code);
+}
+function _renderClassifyResult(code) {
   const r = classify(code);
   const area = document.getElementById('result-area');
   const labels = {
