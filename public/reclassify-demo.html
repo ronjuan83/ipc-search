@@ -165,6 +165,65 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
     </div>
   </div>
 
+  <!-- Four levels explained -->
+  <div class="card">
+    <h2>四種處理等級說明</h2>
+    <div style="display:grid;gap:14px">
+
+      <div style="background:#e8f5e9;border-left:4px solid #4caf50;border-radius:0 8px 8px 0;padding:14px 16px">
+        <div style="font-weight:700;color:#2e7d32;margin-bottom:4px">不需處理 (~85%)</div>
+        <div style="font-size:0.85rem;color:#555">
+          該 IPC 代碼在歷次版本中<strong>未涉及任何異動</strong>，分類定義完全不變。
+          這些專利的 IPC 無論在哪個版本都代表相同的技術範圍，無需任何動作。
+        </div>
+        <div style="font-size:0.78rem;color:#888;margin-top:6px">
+          範例：<code>G06F 3/01</code>（人機介面輸入裝置）— 從第 6 版至今定義不變。
+        </div>
+      </div>
+
+      <div style="background:#e3f2fd;border-left:4px solid #2196f3;border-radius:0 8px 8px 0;padding:14px 16px">
+        <div style="font-weight:700;color:#1565c0;margin-bottom:4px">自動替換 (~4%)</div>
+        <div style="font-size:0.85rem;color:#555">
+          該 subclass <strong>已被 WIPO 正式廢棄</strong>，且只有唯一一個繼承代碼。
+          例如 C13C（糖的精製）在 2011 年被廢棄，<strong>全部</strong>合併到 C13B。
+          此類可以安全地自動替換 subclass 前綴，無歧義。
+        </div>
+        <div style="font-size:0.78rem;color:#888;margin-top:6px">
+          範例：<code>C13C 3/02</code> → <code style="color:#1565c0;font-weight:600">C13B 3/02</code>（保留 group/subgroup，只換 subclass）
+        </div>
+      </div>
+
+      <div style="background:#fff3e0;border-left:4px solid #ff9800;border-radius:0 8px 8px 0;padding:14px 16px">
+        <div style="font-weight:700;color:#e65100;margin-bottom:4px">需人工判斷 (~3%) — 廢棄多目的地</div>
+        <div style="font-size:0.85rem;color:#555">
+          該 subclass 已被廢棄，但<strong>拆分成多個新代碼</strong>。
+          例如 F24J（太陽能集熱器）在 2018 年被拆成 F24S（太陽能集熱器）、F24T（地熱集熱器）、F24V（其他熱傳遞）三個新代碼。
+          系統無法自動判斷該專利屬於哪一個，<strong>需要審查人員根據專利內容選擇正確的目的地</strong>。
+        </div>
+        <div style="font-size:0.78rem;color:#888;margin-top:6px">
+          範例：<code>F24J 2/46</code> → 候選：<code style="color:#e65100;font-weight:600">F24S</code> / <code style="color:#e65100;font-weight:600">F24T</code> / <code style="color:#e65100;font-weight:600">F24V</code>（看專利是太陽能、地熱、還是其他）
+        </div>
+      </div>
+
+      <div style="background:#fce4ec;border-left:4px solid #e91e63;border-radius:0 8px 8px 0;padding:14px 16px">
+        <div style="font-weight:700;color:#c62828;margin-bottom:4px">需確認範圍 (~8%) — 技術範圍部分移動</div>
+        <div style="font-size:0.85rem;color:#555">
+          該 IPC 代碼<strong>本身仍然存在</strong>，但其涵蓋的技術範圍在某個版本<strong>被縮小</strong>，
+          部分技術內容被移到了新的代碼。專利可能留在原位，也可能需要跟著移走。
+          <strong>這是最需要專業判斷的類型</strong> — 必須閱讀專利的摘要/申請範圍，判斷它描述的技術是否屬於被移走的部分。
+        </div>
+        <div style="font-size:0.78rem;color:#888;margin-top:6px">
+          範例：<code>H01L 21/00</code>（半導體製程）的 MEMS 製程部分在 2000 年移到 <code style="color:#c62828;font-weight:600">B81C 1/00</code>。
+          如果該專利是做半導體蝕刻 → 留在 H01L；如果是做 MEMS 加工 → 應改為 B81C。
+        </div>
+        <div style="font-size:0.78rem;color:#888;margin-top:4px">
+          建議做法：用 WIPO IPCCAT（英文摘要）重新分類，或由領域專家人工審查。
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- Stats -->
   <div class="card">
     <h2>模擬分析結果（1,000 筆範例資料）</h2>
