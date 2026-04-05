@@ -99,6 +99,9 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
 .h01l-to { background: #e3f2fd; border-radius: 8px; padding: 16px; }
 .h01l-from .big { font-size: 2.5rem; font-weight: 800; color: #c62828; }
 .h01l-chip { display: inline-block; padding: 3px 10px; margin: 3px; border-radius: 6px; background: #bbdefb; color: #1565c0; font-size: 0.8rem; font-weight: 600; }
+.filter-btn { padding:4px 10px;border:2px solid;border-radius:6px;background:#fff;cursor:pointer;font-size:0.8rem;font-weight:600;transition:all 0.15s; }
+.filter-btn:hover { opacity:0.8; }
+.filter-btn.active { color:#fff !important; }
 @media (max-width: 600px) {
   .exec-grid { grid-template-columns: 1fr; }
   .stats-row { grid-template-columns: repeat(2, 1fr); }
@@ -421,10 +424,18 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
   <!-- Sample table -->
   <div class="card">
     <h2>範例處理結果</h2>
-    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-      <button onclick="filterTable('all')" id="btn-all" style="padding:4px 12px;border:2px solid #3498db;border-radius:6px;background:#3498db;color:#fff;cursor:pointer;font-size:0.8rem;font-weight:600">全部</button>
-      <button onclick="filterTable('B')" id="btn-B" style="padding:4px 12px;border:2px solid #3498db;border-radius:6px;background:#fff;color:#3498db;cursor:pointer;font-size:0.8rem;font-weight:600">B 部</button>
-      <button onclick="filterTable('changed')" id="btn-changed" style="padding:4px 12px;border:2px solid #e91e63;border-radius:6px;background:#fff;color:#e91e63;cursor:pointer;font-size:0.8rem;font-weight:600">僅異動</button>
+    <div style="display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+      <button onclick="setSection('all')" id="btn-all" class="filter-btn active" style="border-color:#3498db;color:#3498db">全部</button>
+      <button onclick="setSection('A')" id="btn-A" class="filter-btn" style="border-color:#3498db;color:#3498db">A類</button>
+      <button onclick="setSection('B')" id="btn-B" class="filter-btn" style="border-color:#3498db;color:#3498db">B類</button>
+      <button onclick="setSection('C')" id="btn-C" class="filter-btn" style="border-color:#3498db;color:#3498db">C類</button>
+      <button onclick="setSection('D')" id="btn-D" class="filter-btn" style="border-color:#3498db;color:#3498db">D類</button>
+      <button onclick="setSection('E')" id="btn-E" class="filter-btn" style="border-color:#3498db;color:#3498db">E類</button>
+      <button onclick="setSection('F')" id="btn-F" class="filter-btn" style="border-color:#3498db;color:#3498db">F類</button>
+      <button onclick="setSection('G')" id="btn-G" class="filter-btn" style="border-color:#3498db;color:#3498db">G類</button>
+      <button onclick="setSection('H')" id="btn-H" class="filter-btn" style="border-color:#3498db;color:#3498db">H類</button>
+      <span style="color:#ccc;margin:0 2px">│</span>
+      <button onclick="toggleChanged()" id="btn-changed" class="filter-btn" style="border-color:#e91e63;color:#e91e63">僅異動</button>
       <span id="table-count" style="font-size:0.78rem;color:#888;line-height:28px;margin-left:8px"></span>
     </div>
     <div class="scroll-box">
@@ -784,7 +795,7 @@ function runDemo() {
   // Store all results for filtering
   window._allResults = results;
   window._badgeMap = badgeMap;
-  filterTable('all');
+  setSection('all');
 }
 
 function renderTable(rows) {
@@ -855,35 +866,61 @@ function renderTable(rows) {
   }).join('');
 }
 
-function filterTable(mode) {
-  const all = window._allResults || [];
-  // Update button styles
-  ['all','B','changed'].forEach(m => {
+// Filter state
+let _currentSection = 'all';
+let _changedOnly = false;
+
+function setSection(sec) {
+  _currentSection = sec;
+  // Update section button styles
+  ['all','A','B','C','D','E','F','G','H'].forEach(m => {
     const btn = document.getElementById('btn-' + m);
     if (!btn) return;
-    if (m === mode) { btn.style.background = btn.style.borderColor; btn.style.color = '#fff'; }
-    else { btn.style.background = '#fff'; btn.style.color = btn.style.borderColor; }
+    if (m === sec) { btn.classList.add('active'); btn.style.background = btn.style.borderColor; }
+    else { btn.classList.remove('active'); btn.style.background = '#fff'; }
   });
-  let filtered;
-  if (mode === 'B') {
-    filtered = all.filter(r => r.original.trim().startsWith('B'));
-  } else if (mode === 'changed') {
-    filtered = all.filter(r => r.action !== 'unchanged');
-  } else {
-    filtered = all;
+  applyFilter();
+}
+
+function toggleChanged() {
+  _changedOnly = !_changedOnly;
+  const btn = document.getElementById('btn-changed');
+  if (_changedOnly) { btn.classList.add('active'); btn.style.background = btn.style.borderColor; }
+  else { btn.classList.remove('active'); btn.style.background = '#fff'; }
+  applyFilter();
+}
+
+function applyFilter() {
+  const all = window._allResults || [];
+  let filtered = all;
+
+  // Section filter
+  if (_currentSection !== 'all') {
+    filtered = filtered.filter(r => r.original.trim().startsWith(_currentSection));
   }
-  // Sort: changed first, then unchanged
+
+  // Changed-only filter
+  if (_changedOnly) {
+    filtered = filtered.filter(r => r.action !== 'unchanged');
+  }
+
+  // Sort: changed first
   filtered.sort((a, b) => {
     const order = { auto_replaced: 0, review_deprecated: 1, review_scope: 2, unchanged: 3 };
     return (order[a.action] ?? 9) - (order[b.action] ?? 9);
   });
+
   const countLabel = document.getElementById('table-count');
   if (countLabel) {
     const changed = filtered.filter(r => r.action !== 'unchanged').length;
-    countLabel.textContent = `顯示 ${filtered.length} / ${all.length} 筆（其中 ${changed} 筆有異動）`;
+    const secLabel = _currentSection === 'all' ? '' : ` ${_currentSection}類`;
+    countLabel.textContent = `顯示 ${filtered.length} / ${all.length} 筆${secLabel}（${changed} 筆異動）`;
   }
   renderTable(filtered);
 }
+
+// Keep backward compat for initial call
+function filterTable(mode) { setSection(mode === 'changed' ? _currentSection : mode); if(mode==='changed') toggleChanged(); }
 
 function tryExample(code) { document.getElementById('ipc-input').value = code; tryClassify(); }
 function tryClassify() {
