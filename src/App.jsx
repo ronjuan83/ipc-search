@@ -1279,17 +1279,37 @@ function TechClassifier({ onSearch }) {
       let bigramHits = 0
       const matchedTerms = [] // Improvement 1: track what matched
 
-      // --- Exact substring match (highest priority) ---
-      // Bonus: keyword/label match ranks higher than tipoDesc-only match
-      const kwText = (t.keywords || []).join('；') + '；' + (t.label || '') + '；' + (getSubclassName(t.code) || '')
+      // --- Tiered exact matching with term frequency ---
+      const kws = t.keywords || []
+      const label = t.label || ''
+      const subName = getSubclassName(t.code) || ''
+      const tipoDesc = t.tipoDesc || ''
       const hasExact = q.length >= 2 && allText.includes(q)
-      const hasKwExact = q.length >= 2 && kwText.includes(q)
-      if (hasKwExact) {
-        score += 150 // keyword/label exact match → strongest signal
-        matchedTerms.push(q)
-      } else if (hasExact) {
-        score += 80 // tipoDesc-only match → weaker
-        matchedTerms.push(q)
+
+      // Tier 1: query EXACTLY equals a keyword → strongest (e.g., "焊接" === keyword "焊接")
+      const isExactKw = kws.some(k => k === q)
+      // Tier 2: query exactly equals subclass name or label Chinese part
+      const labelZhPart = label.split(/\s/)[0] || ''
+      const isExactName = (subName.includes(q) && q.length >= 2) || labelZhPart === q
+      // Tier 3: query is substring of a keyword (e.g., "焊接" in "超音波焊接")
+      const isSubstrKw = !isExactKw && kws.some(k => k.includes(q) || q.includes(k))
+      // Tier 4: query found in tipoDesc only
+      const isInTipo = !isExactKw && !isSubstrKw && tipoDesc.includes(q)
+
+      if (isExactKw) {
+        score += 200; matchedTerms.push(q)
+      } else if (isExactName) {
+        score += 180; matchedTerms.push(q)
+      } else if (isSubstrKw) {
+        score += 100; matchedTerms.push(q)
+      } else if (isInTipo) {
+        score += 60; matchedTerms.push(q)
+      }
+
+      // Term frequency bonus: how often does the query appear in tipoDesc?
+      if (q.length >= 2 && tipoDesc.length > 0) {
+        const tf = (tipoDesc.match(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length
+        score += Math.min(tf * 3, 30) // up to 30 pts for high frequency
       }
 
       // --- Bigram co-occurrence with TF-IDF weighting ---
@@ -1323,22 +1343,18 @@ function TechClassifier({ onSearch }) {
         score += triCov * triAvgIdf * 25 // trigram TF-IDF bonus
       }
 
-      // --- Improvement 1: Collect matched keywords for display ---
+      // --- Collect matched keywords for display ---
       if (bigramHits > 0) {
-        // Find which Chinese keywords from this subclass overlap with the query
-        const kws = (t.keywords || []).filter(k => /[\u4e00-\u9fff]{2,}/.test(k) && k.length <= 8)
-        kws.forEach(kw => {
-          // Check: query contains keyword, keyword contains query, or shared bigrams ≥ 50%
+        const zhKws = kws.filter(k => /[\u4e00-\u9fff]{2,}/.test(k) && k.length <= 8)
+        zhKws.forEach(kw => {
           const shared = qBigrams.filter(bi => kw.includes(bi)).length
           if (q.includes(kw) || kw.includes(q) || shared >= Math.max(2, Math.ceil(qBigrams.length * 0.4))) {
             if (!matchedTerms.includes(kw) && kw !== q) matchedTerms.push(kw)
           }
         })
-        // Also check label (Chinese part only)
-        const labelZh = (t.label || '').split(/\s/)[0]
-        if (labelZh && labelZh.length >= 2 && /[\u4e00-\u9fff]/.test(labelZh)) {
-          const shared = qBigrams.filter(bi => labelZh.includes(bi)).length
-          if (shared >= 1 && !matchedTerms.includes(labelZh)) matchedTerms.push(labelZh)
+        if (labelZhPart && labelZhPart.length >= 2 && /[\u4e00-\u9fff]/.test(labelZhPart)) {
+          const shared = qBigrams.filter(bi => labelZhPart.includes(bi)).length
+          if (shared >= 1 && !matchedTerms.includes(labelZhPart)) matchedTerms.push(labelZhPart)
         }
       }
 
