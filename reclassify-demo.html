@@ -167,7 +167,7 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
 
   <!-- Stats -->
   <div class="card">
-    <h2>模擬分析結果（200 筆範例資料）</h2>
+    <h2>模擬分析結果（1,000 筆範例資料）</h2>
     <div class="stats-row" id="stats-row">
       <div class="stat-box stat-unchanged"><div class="num" id="n-unchanged">-</div><div class="label">不需處理</div></div>
       <div class="stat-box stat-auto"><div class="num" id="n-auto">-</div><div class="label">自動替換</div></div>
@@ -362,6 +362,12 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
   <!-- Sample table -->
   <div class="card">
     <h2>範例處理結果</h2>
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+      <button onclick="filterTable('all')" id="btn-all" style="padding:4px 12px;border:2px solid #3498db;border-radius:6px;background:#3498db;color:#fff;cursor:pointer;font-size:0.8rem;font-weight:600">全部</button>
+      <button onclick="filterTable('B')" id="btn-B" style="padding:4px 12px;border:2px solid #3498db;border-radius:6px;background:#fff;color:#3498db;cursor:pointer;font-size:0.8rem;font-weight:600">B 部</button>
+      <button onclick="filterTable('changed')" id="btn-changed" style="padding:4px 12px;border:2px solid #e91e63;border-radius:6px;background:#fff;color:#e91e63;cursor:pointer;font-size:0.8rem;font-weight:600">僅異動</button>
+      <span id="table-count" style="font-size:0.78rem;color:#888;line-height:28px;margin-left:8px"></span>
+    </div>
     <div class="scroll-box">
       <table class="sample-table" id="sample-table">
         <thead><tr><th>#</th><th>原始 IPC</th><th>狀態</th><th>結果 / 建議</th><th>說明</th></tr></thead>
@@ -535,7 +541,90 @@ function runDemo() {
     'C12P 7/00','C12Q 1/00','C21D 1/00','C22F 1/00','C23C 14/00','C25D 3/00',
     'C30B 15/00','C40B 40/00',
   ];
-  const all = [...sampleIPCs, ...unchanged].slice(0, 200);
+  // 771 extra codes (40% B-section, includes all B donated/received + cross-section)
+  const extraCodes = [
+    'B29K 227/18','F16T 1/08','A61G 5/04','H01L 27/11546','B01D 59/22','G02B 1/00','B31B 39/16','B28B 15/72','H05H 1/02','B28B 1/00',
+    'B60T 7/14','G01P 5/12','C07C 101/00','B60W 10/04','B31D 3/00','G06G 1/04','F24V 40/00','C13C 1/02','F02C 3/00','B01D 71/50',
+    'B01F 17/12','F21L 1/04','B24B 37/04','H01L 27/11519','H01L 29/73','B22F 12/37','B64C 39/06','B44D 11/06','G01W 1/02','B32B 5/385',
+    'G01R 1/04','G03F 1/02','B65D 91/00','G09F 1/06','A41C 1/06','B01D 67/00','B21L 15/00','H01R 1/14','B01D 15/10','F21P 5/00',
+    'A23C 19/11','B31B 31/42','F16F 1/00','D99Z 36/53','G01R 31/26','B65D 8/08','H01S 1/355','B01F 17/38','B29C 64/273','F23R 1/04',
+    'H01L 31/05','H01M 1/08','C06C 1/06','G21B 1/01','B01F 17/08','G08C 13/02','G01B 7/34','F25J 23/00','B60L 15/14','C22F 1/02',
+    'H01L 41/00','B60K 41/26','C03B 13/00','G05D 1/02','B01J 20/28','C03C 10/00','C13D 1/00','A23F 5/14','F16D 1/02','B64U 101/47',
+    'B81B 1/00','B66C 1/42','A01B 1/04','H03B 1/02','A45B 1/04','F01K 1/08','B60T 8/175','H01L 33/54','B28B 13/86','B63H 15/00',
+    'H01L 29/49','B31D 23/86','H01L 23/50','F24B 1/00','G02B 6/12','F24J 2/26','F04D 1/02','A63C 1/02','B63H 1/06','B05B 1/00',
+    'H01H 5/00','B62J 11/24','F01K 1/02','H01L 41/087','G02B 6/43','H01L 27/13','A62C 11/00','B82B 1/00','A62B 1/06','H01L 41/27',
+    'B01F 29/34','B23P 15/00','C23D 13/00','B81B 3/00','B66C 23/52','G06F 1/00','B23K 26/70','B60B 7/04','B60W 105/04','B68F 99/00',
+    'B60L 5/30','B60K 1/04','B01J 41/06','B41B 7/00','B60K 37/20','B02C 18/42','C12H 1/00','H01L 21/363','H10K 10/10','A23C 17/00',
+    'H02K 1/00','E03B 11/00','C06D 5/06','B41J 19/08','B66D 37/22','B01F 17/30','C14C 11/00','A44B 1/04','B60K 35/25','B31D 5/02',
+    'F01K 1/00','H01L 21/461','E02B 11/02','C07D 101/00','H01L 21/68','G01Q 10/00','B30B 1/04','B01D 15/08','B31B 37/78','C04B 1/10',
+    'F21V 1/04','B64C 39/00','B01F 17/14','B63H 11/16','A01N 1/02','B60L 53/53','F16B 1/035','A23D 3/14','H01L 27/11558','B01D 71/38',
+    'G01B 1/00','E01C 11/00','F42B 1/00','C08L 1/00','C13G 1/00','B66D 1/34','G09C 11/00','H02N 2/18','F24C 1/00','B21B 37/78',
+    'B60L 58/18','B24B 7/06','B01F 17/26','B60S 9/14','H01L 31/053','C12H 1/04','B43L 23/00','B65G 49/07','H02N 1/00','B65D 83/50',
+    'B65H 5/04','B21B 31/07','F21K 2/04','C10J 1/00','B31B 5/00','C12R 1/645','A23B 11/12','H03H 1/02','B60L 8/00','H10F 10/11',
+    'B21D 11/02','B31B 37/42','D21B 1/08','D03C 1/00','B21H 31/00','A61F 1/007','A61N 1/00','F16G 1/04','A61C 1/00','B05B 5/12',
+    'B60W 10/11','G01P 5/08','D06N 35/73','A61M 1/02','B01F 17/24','E06C 1/24','C08H 1/04','A23D 7/06','E01B 1/16','H04S 23/00',
+    'H03C 3/00','H02P 1/08','B29K 101/00','B60K 28/16','H01L 29/417','H01L 25/00','B01J 19/00','G06K 9/64','B22D 11/06','B23K 5/18',
+    'H01R 31/00','B01D 21/24','B01F 17/16','E05B 13/00','H02G 1/06','B81C 3/00','G04G 1/02','B65B 65/08','B22C 38/240','H01L 49/00',
+    'B01J 39/06','B31D 1/00','E01H 1/00','G06F 19/10','G01R 1/00','B23B 11/10','F17C 1/04','F16G 1/00','G07B 1/36','B68F 13/00',
+    'G01F 1/68','H01L 21/08','C12Q 1/02','B66D 35/03','B62M 29/02','B60N 3/00','B02C 13/08','B09B 5/00','A63C 5/11','G06J 1/02',
+    'G06F 19/00','C25F 3/00','B01D 39/14','H04H 1/02','B01J 39/00','C13B 10/04','B64C 27/08','H02K 57/00','B01F 17/44','G09G 3/36',
+    'F25C 1/04','B01F 17/54','F21W 101/023','B65B 17/02','H04N 5/74','D21C 1/00','G06K 9/40','D21F 1/36','B31B 35/20','B62B 9/20',
+    'C23F 1/02','B01J 38/22','B65H 31/30','G01N 27/00','B02C 18/00','B61K 1/06','B23K 26/20','H01L 23/28','B22D 17/32','F21S 1/04',
+    'B01F 17/04','B81B 7/04','B68C 5/02','H03L 3/00','E21C 1/00','H01L 31/077','G21F 1/04','F02K 1/06','H01L 29/8605','F16S 1/00',
+    'B81C 1/00','B29D 12/00','G21J 1/08','A61K 7/047','B28B 7/20','A23C 1/03','H02N 2/00','B31B 13/24','H04R 31/00','B60K 41/20',
+    'F23C 1/02','B64C 31/06','B62K 19/16','F23Q 1/02','A41C 1/00','A45F 3/00','A01C 11/00','G06K 9/26','D21C 1/10','A61K 7/42 - 7/44',
+    'B01J 39/08 - 41/04','G01N 21/892','B31B 25/14','H01L 35/12','B44F 25/00','B31D 5/00','B65G 15/56','B60K 41/04','B65D 71/40','B60B 17/02',
+    'B68F 21/02','F21P 5/04','B05B 15/62','B01D 33/067','B01F 17/52','H01L 29/792','H01L 27/102','H03H 1/00','B65D 75/20','B60K 41/22',
+    'B01D 69/12','B64D 35/026','B31B 39/32','B01J','B32B 5/04','F21M 3/26','A44B 1/00','G01C 1/04','G08G 1/01','G01P 1/04',
+    'B24B 37/32','H01L 29/94','A23B 11/10','C09F 101/16','H03F 1/04','B64C 99/00','B60Q 21/116','E21C 1/04','H01S 1/00','B01J 105/00',
+    'B41J 50/62','B02C 17/24','C07F 11/24','A47H 1/00','C22B 1/14','F24J 2/30','H01L 31/024','H01L 23/427','B01F 31/00','H02B 1/01',
+    'B29D 9/00','B01D 15/36','F25D 11/00','A61K 7/30','B02C 18/44','A61K 7/22 - 7/28','B65D 88/06','H02K 1/04','B01J 35/04','D02G 1/00',
+    'C23C 10/00','H01L 41/09','C12G 1/02','H01L 29/08','H01L 31/108','A47J 15/240','B02C 17/20','G01W 1/00','F03B 1/02','B31B 50/46',
+    'B60C 25/125','C08J 11/00','C09B 1/00','A01M 1/00','B41B 19/76','C40B 60/00','H05H 1/00','A63J 1/00','H01L 41/332','B01J 41/08 - 45/00',
+    'G12B 21/22','F23J 1/02','D06M 1/00','B41J 35/36','B31B 37/38','C01D 1/26','B30B 9/22','A23C 20/00','A23L 3/20','H01L 33/60',
+    'A43D 1/00','B32B 37/00','H01L 29/06','H01L 27/11578','C02F 1/04','H01H 50/00','F16M 1/023','B01F 17/28','H01G 11/04','F04B 1/00',
+    'A47B 1/00','B68G 20/00','C25D 5/02','G01L 9/00','B64U 11/67','D06L 1/01','B01F 17/40','F16H 1/02','G06E 1/00','A61K 7/20',
+    'B31B 33/30','A63G 1/00','D01B 1/14','B64C 27/20','C13D 3/16','A47L 1/06','A23L 3/3553','B64C 27/10','B02C 13/078','C09J 1/00',
+    'B28B 3/76','H01L 21/8239','C07J 101/00','B65D 111/02','F04B 1/02','B23D 75/00','E21B 1/02','D21J 11/73','B81B 5/00','F02F 1/26',
+    'G06K 9/46','F41H 1/00','B44F 1/12','G01K 1/00','B60B 28/00','G16Y 10/05','H01H 1/00','G10D 1/00','H02B 1/00','C21C 1/06',
+    'G01N 30/48','B02C 13/12','G11B 9/00','B31D 99/00','H01L 27/00','D03J 1/02','B04C 25/172','H04M 1/02','H01B 1/00','H01L 23/22',
+    'B62D 25/20','H04K 3/00','B44C 1/22','A61P 1/00','F23B 1/02','B32B 27/34','E21C 5/12','H10P 14/20','B01F 27/17','D06F 1/04',
+    'D06B 1/02','G06C 1/00','A42C 1/00','B41J 1/54','B23Q 35/46','F24S 10/13','B01J 39/00 - 39/04','F16G 1/02','B28B 21/02','B65H 31/28',
+    'H02B 1/015','H01L 21/82','B01F 17/06','E01D 1/00','H04Q 1/04','H10B 10/10','A61G 1/007','B65D 1/24','B43L 5/00','G01P 15/08',
+    'B64C 39/02','F22D 1/00','H01L 21/00','D07B 1/00','G01J 1/017','A61Q 1/04','G01N 33/00','C02F 1/02','H01L 23/057','G16B 15/00',
+    'H01L 23/498','H01L 31/049','F25J 25/00','B60W 60/00','B28B 11/041','B01F 17/18','F16C 1/10','B23D 9/16','F21P','A23J 1/00',
+    'B60R 25/04','B65D 83/285','A23L 1/015','B31B 50/00','B21L 99/00','B01J 47/00','B23K 11/14','H01L 21/3213','B65D 5/04','F03C 1/02',
+    'D04C 3/24','G01L 1/16 - 1/18','G06K 9/03','H01L 23/556','B25C 1/30','D02J 1/00','F04D 11/00','F03B 1/04','B01F 17/32','B32B 7/027',
+    'H03H 9/00','A41H 10/240','F16D 1/06','B81B 7/00','G01L 1/16','B31B 11/14','B65G 47/00','E05G 1/00','F21S 2/00','G21F 1/06',
+    'G03D 11/00','C08J 11/08','C13G 1/04','A01M 1/02','B44C 1/16','F22G 1/10','H01L 29/41','B01F 17/48','B61C 9/34','A22C 15/00',
+    'G03F 7/00','A45D 1/00','B65D 83/58','B01F 17/46','H01L 41/37','B31B 29/14','C13J 1/00','B60T 8/36','H02S 10/10','B23K 1/00',
+    'G01R 31/56','A43B 7/1405','C23C 10/04','G11B 1/02','E01C 11/02','B09B 3/00','B63B 15/04','E03C 1/00','C40B 70/00','B29C 48/84',
+    'A01K 1/035','C06C 1/182','C21D 1/18','B63H 9/061','F02G 3/00','G21H 1/00','H01L 21/8258','F26B 1/12','B67D 7/58','G08B 1/12',
+    'B29B 7/28','F16H 1/00','C10M 1/00','A24C 1/40','F23G 1/00','B01D 23/54','B60B 1/04','G06K 9/22','A63F 1/00','C09G 11/08',
+    'B81B 7/02','G04F 13/00','H01C 1/00','G07C 1/02','B01J 19/12','C10K 3/02','G01P 15/14','G02B 6/42','G01H 11/00','G01F 1/00',
+    'G10D 1/02','H04Q 7/06','B62D 25/24','B01J 39/24','D06F 1/02','H01L 29/861','C40B 1/06','B60K 41/02','B60K 16/00','C13D 1/02',
+    'A42C 1/53','B01J 35/77','A21B 1/40','B01F 17/22','H01L 21/383','C25F 1/00','B81C 5/00','B01F 17/34','B60Q 3/40','B66D 7/18',
+    'A41D 19/015','B23B 37/00','F24D 10/00','H10W 10/00','H01L 31/147','B60R 1/29','G12B 21/12','B62J 45/10','F16S 1/02','H04N 1/024',
+    'A41D 1/04','H01L 1/16','B31B 13/18','C09C 1/42','B60K 41/00','B01F 17/10','B05B 99/00','C22F 1/00','B21H 108/14','B23K 26/00',
+    'B60R 13/06','H01J 1/02','A41C 1/02','B60T 11/28','B64G 1/56','B01F 17/36','F41C 1/00','H01L 31/036','B63H 8/10','A23L 2/50',
+    'B01J 10/02','B41J 2/16','A47H 1/13','B60S 5/06','G02B 26/08','F21M 15/00','A23F 3/00','H01L 27/20','G03B 1/02','F02G 5/00',
+    'F41J 1/10','C09K 10/81','F16L 1/06','C12G 1/022','B62D 33/07','B01F 17/56','G09D 1/00','B07B 9/00','F21M 3/20','B60K 41/24',
+    'G09C 1/04','B31D 5/04','B60W 10/02','H02S 10/12','B32B 5/132','B60K 41/28','B01D 3/32','D06Q 1/04','F23D 1/00','B60K 35/232',
+    'B60K 35/50','B01F 17/02','B23K 3/047','A47C 1/00','B01F 35/75','B01D 17/10','E03D 1/00','A63H 27/08','B21K 43/20','H01G 11/02',
+    'B68F 3/00','C10B 103/240','F03D 1/02','A01L 1/00','A21B 1/42','F22B 1/18','A46D 1/00','C13F 1/04','H01L 41/113','B01J 71/76',
+    'C07M 101/02','C13F 3/00','B31B 3/16','B60K 17/00','H10F 10/00','A23L 3/44','C06F 1/02','A61D 1/00','A43B 3/28','C12C 1/00',
+    'B23P 15/14','C01B 31/16','A22C 11/00','G10G 7/00','G06K 9/22 - 9/24','H04W 12/03','B60R 25/21','C07G 1/00','A23F 3/08','G01P 5/10',
+    'B65G 1/07','B60W 20/50','B23Q 16/00','E06C 1/18','F41C 13/00','B01F 17/42','B01D 31/02','B01F 17/50','B65D 47/06','B64U 30/10',
+    'D02H 11/00','A21D 15/06','C07B 13/553','B01D 17/14','H01L 21/603','B65H 45/18','B01J 43/00','E04D 1/02','B05D 7/14','C12N 1/04',
+    'B23K 11/18','A62D 1/08','C23G 1/00','B65D 5/491','D06P 1/00','C01F 11/02','B65G 53/20','B01F 17/20','A41F 1/04','B65G 13/10',
+    'H02M 1/02','H01L 23/10','H01L 21/445','H01L 27/11543','B29K 707/00','E21C 3/12','G16Y 10/00','B31B 17/68','D06N 7/00','F02F 1/00',
+    'H01L 23/12','H01L 29/744','B61B 21/20','B01F 17/00','B24B 11/00','G21D 1/04','B60Q','C21B 13/00','G06V 10/12','H10B 12/00',
+    'B31B 31/50','B01D 157/00','H02G 1/04','G06F 19/18','B01D 46/44','B62D 67/00','H01S 1/06','C23C 16/04','B31B 31/82','E05F 1/00',
+    'H04J 1/00','B28B 15/62','B60K 20/04','B23P 23/00','B31B 13/08','B32B 21/88','B28D 3/22','B61D 45/00','B41L 5/00','B23F 7/00',
+    'B62M 6/20','B31B 29/66','B63B 22/24','B61L 1/14','B31D 41/25','B32B 5/18','B21K 51/14','B65D 19/30','B29B 13/00','B31B 19/02',
+    'B31B 27/30','B28B 7/50','B31B 17/58','B60L 58/30','B29C 5/40','B60J 10/242','B01D 20/00','B65B 53/00','B64U 30/40','B01F 9/20',
+  ];
+  const all = [...sampleIPCs, ...unchanged.slice(0, 152), ...extraCodes].slice(0, 1000);
   const counts = { unchanged: 0, auto_replaced: 0, review_deprecated: 0, review_scope: 0 };
   const results = [];
   for (const ipc of all) {
@@ -571,10 +660,16 @@ function runDemo() {
     review_deprecated: '<span class="badge badge-deprecated">需人工判斷</span>',
     review_scope: '<span class="badge badge-scope">需確認範圍</span>',
   };
-  const interesting = results.filter(r => r.action !== 'unchanged').slice(0, 25);
-  const unchangedSample = results.filter(r => r.action === 'unchanged').slice(0, 8);
-  const tableRows = [...interesting, ...unchangedSample];
-  document.getElementById('sample-body').innerHTML = tableRows.map((r, i) => {
+  // Store all results for filtering
+  window._allResults = results;
+  window._badgeMap = badgeMap;
+  filterTable('all');
+}
+
+function renderTable(rows) {
+  const badgeMap = window._badgeMap;
+  document.getElementById('table-count').textContent = `顯示 ${rows.length} 筆`;
+  document.getElementById('sample-body').innerHTML = rows.map((r, i) => {
     let resultCol = '';
     if (r.action === 'auto_replaced') resultCol = `<span class="new-code">${r.result}</span>`;
     else if (r.action === 'review_deprecated') resultCol = `候選: <span class="new-code">${r.candidates}</span>`;
@@ -588,6 +683,33 @@ function runDemo() {
       <td style="font-size:0.78rem;color:#777">${r.detail || '—'}</td>
     </tr>`;
   }).join('');
+}
+
+function filterTable(mode) {
+  const all = window._allResults || [];
+  // Update button styles
+  ['all','B','changed'].forEach(m => {
+    const btn = document.getElementById('btn-' + m);
+    if (!btn) return;
+    if (m === mode) { btn.style.background = btn.style.borderColor; btn.style.color = '#fff'; }
+    else { btn.style.background = '#fff'; btn.style.color = btn.style.borderColor; }
+  });
+  let filtered;
+  if (mode === 'B') {
+    filtered = all.filter(r => r.original.trim().startsWith('B'));
+    // Show changed first, then unchanged
+    const changed = filtered.filter(r => r.action !== 'unchanged');
+    const unch = filtered.filter(r => r.action === 'unchanged').slice(0, 20);
+    filtered = [...changed, ...unch];
+  } else if (mode === 'changed') {
+    filtered = all.filter(r => r.action !== 'unchanged');
+  } else {
+    // All: show changed first, then sample of unchanged
+    const changed = all.filter(r => r.action !== 'unchanged');
+    const unch = all.filter(r => r.action === 'unchanged').slice(0, 15);
+    filtered = [...changed, ...unch];
+  }
+  renderTable(filtered);
 }
 
 function tryExample(code) { document.getElementById('ipc-input').value = code; tryClassify(); }
