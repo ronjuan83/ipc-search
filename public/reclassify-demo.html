@@ -474,20 +474,29 @@ function classify(code) {
   if (deprecatedMulti[p.sub]) {
     const dests = deprecatedMulti[p.sub];
     const at = deprecatedAt[p.sub] || '?';
-    return { action: 'review_deprecated', original: code, candidates: dests.join(', '), detail: `${p.sub} 廢棄 → ${dests.join('/')}（${at} 版），需依專利內容判斷` };
+    const destsWithNames = dests.map(d => ({ code: d, name: getSubName(d) }));
+    return { action: 'review_deprecated', original: code, candidates: dests.join(', '), destsWithNames,
+      srcName: getSubName(p.sub),
+      detail: `${p.sub} 廢棄 → ${dests.join('/')}（${at} 版），需依專利內容判斷` };
   }
   if (p.group) {
     const info = exactLookup[p.group];
     if (info) {
       const dst = extractFirstDst(info.dst, info.srcSub);
-      return { action: 'review_scope', original: code, possible_new: dst, detail: `${p.group} → ${dst}（${info.version}），需確認專利是否屬於移出的技術範圍` };
+      const srcTitle = getTitle(p.group) || getTitle(p.sub + ' ' + p.main + '/00');
+      const dstTitle = getTitle(dst);
+      return { action: 'review_scope', original: code, possible_new: dst, srcTitle, dstTitle,
+        detail: `${p.group} → ${dst}（${info.version}），需確認專利是否屬於移出的技術範圍` };
     }
     if (p.main !== null) {
       const mainKey = `${p.sub} ${p.main}/00`;
       const mainInfo = exactLookup[mainKey];
       if (mainInfo && mainKey !== p.group) {
         const dst = extractFirstDst(mainInfo.dst, mainInfo.srcSub);
-        return { action: 'review_scope', original: code, possible_new: dst, detail: `主組 ${mainKey} 有異動 → ${dst}（${mainInfo.version}），此子組可能受影響` };
+        const srcTitle = getTitle(mainKey);
+        const dstTitle = getTitle(dst);
+        return { action: 'review_scope', original: code, possible_new: dst, srcTitle, dstTitle,
+          detail: `主組 ${mainKey} 有異動 → ${dst}（${mainInfo.version}），此子組可能受影響` };
       }
     }
   }
@@ -495,8 +504,20 @@ function classify(code) {
 }
 
 const BASE = location.pathname.replace(/\/[^/]*$/, '/');
-fetch(BASE + 'ipc_data.json').then(r => r.json()).then(data => {
+let groupTitleMap = {}; // code → {title, zh}
+let subNames = {};      // subclass → name
+
+Promise.all([
+  fetch(BASE + 'ipc_data.json').then(r => r.json()),
+  fetch(BASE + 'ipc_group_titles.json').then(r => r.json()),
+  fetch(BASE + 'ipc_names.json').then(r => r.json()),
+]).then(([data, titles, names]) => {
   DATA = data;
+  subNames = names || {};
+  // Build group title lookup
+  if (Array.isArray(titles)) {
+    titles.forEach(t => { groupTitleMap[t.code] = t; });
+  }
   for (const [old, newVal] of Object.entries(data.deprecated_to || {})) {
     if (Array.isArray(newVal)) deprecatedMulti[old] = newVal;
     else deprecatedSingle[old] = newVal;
@@ -520,6 +541,25 @@ fetch(BASE + 'ipc_data.json').then(r => r.json()).then(data => {
   buildH01LCase(data);
   runDemo();
 });
+
+function getTitle(code) {
+  const t = groupTitleMap[code];
+  if (t) return t.zh || t.title || '';
+  // Try main group (xx/00)
+  const p = parseIPC(code);
+  if (p && p.main !== null) {
+    const mainCode = p.sub + ' ' + p.main + '/00';
+    const mt = groupTitleMap[mainCode];
+    if (mt) return mt.zh || mt.title || '';
+  }
+  return '';
+}
+
+function getSubName(code) {
+  const sub = code.substring(0, 4);
+  const name = subNames[sub] || '';
+  return typeof name === 'string' ? name.substring(0, 25) : '';
+}
 
 function buildTimeline(data) {
   const verCounts = {};
@@ -730,16 +770,61 @@ function renderTable(rows) {
   document.getElementById('table-count').textContent = `顯示 ${rows.length} 筆`;
   document.getElementById('sample-body').innerHTML = rows.map((r, i) => {
     let resultCol = '';
-    if (r.action === 'auto_replaced') resultCol = `<span class="new-code">${r.result}</span>`;
-    else if (r.action === 'review_deprecated') resultCol = `候選: <span class="new-code">${r.candidates}</span>`;
-    else if (r.action === 'review_scope') resultCol = `可能: <span class="new-code">${r.possible_new || ''}</span>`;
+    let detailCol = r.detail || '—';
+    if (r.action === 'auto_replaced') {
+      resultCol = `<span class="new-code">${r.result}</span>`;
+    } else if (r.action === 'review_deprecated') {
+      resultCol = `候選: <span class="new-code">${r.candidates}</span>`;
+      // Show source + candidates with names
+      const dests = r.destsWithNames || [];
+      if (dests.length > 0) {
+        const srcName = r.srcName || '';
+        detailCol = `<div style="font-size:0.75rem">` +
+          `<div style="background:#fff3e0;padding:3px 8px;border-radius:4px;margin-bottom:4px">` +
+            `<span style="font-weight:600;color:#e65100">${r.original.substring(0,4)}</span>` +
+            (srcName ? ` <span style="color:#888">${srcName}</span>` : '') +
+            ` <span style="color:#c62828">（已廢棄）</span>` +
+          `</div>` +
+          `<div style="color:#555;margin-bottom:2px">候選目的地：</div>` +
+          dests.map(d =>
+            `<div style="background:#e3f2fd;padding:3px 8px;border-radius:4px;margin-bottom:2px">` +
+              `<span style="font-weight:600;color:#1565c0">${d.code}</span>` +
+              (d.name ? ` <span style="color:#555">${d.name}</span>` : '') +
+            `</div>`
+          ).join('') +
+        `</div>`;
+      }
+    } else if (r.action === 'review_scope') {
+      const dst = r.possible_new || '';
+      resultCol = `可能: <span class="new-code">${dst}</span>`;
+      // Build comparison detail with titles
+      const srcT = r.srcTitle || '';
+      const dstT = r.dstTitle || '';
+      if (srcT || dstT) {
+        const srcSub = getSubName(r.original);
+        const dstSub = dst ? getSubName(dst) : '';
+        detailCol = `<div style="display:flex;gap:6px;align-items:stretch">` +
+          `<div style="flex:1;background:#fce4ec;padding:4px 8px;border-radius:4px;font-size:0.75rem">` +
+            `<div style="font-weight:600;color:#c62828">${r.original}</div>` +
+            (srcSub ? `<div style="color:#888">${srcSub}</div>` : '') +
+            (srcT ? `<div style="color:#555">${srcT}</div>` : '') +
+          `</div>` +
+          `<div style="display:flex;align-items:center;color:#999;font-size:0.9rem">→</div>` +
+          `<div style="flex:1;background:#e3f2fd;padding:4px 8px;border-radius:4px;font-size:0.75rem">` +
+            `<div style="font-weight:600;color:#1565c0">${dst}</div>` +
+            (dstSub ? `<div style="color:#888">${dstSub}</div>` : '') +
+            (dstT ? `<div style="color:#555">${dstT}</div>` : '') +
+          `</div>` +
+        `</div>`;
+      }
+    }
     const sub = r.original.trim().substring(0, 4);
     return `<tr>
       <td>${i + 1}</td>
       <td><a href="./?ipc=${sub}" style="color:#2c3e50;text-decoration:none" title="查看 ${sub} 完整異動"><code>${r.original}</code></a></td>
       <td>${badgeMap[r.action]}</td>
       <td>${resultCol}</td>
-      <td style="font-size:0.78rem;color:#777">${r.detail || '—'}</td>
+      <td style="font-size:0.78rem;color:#777">${detailCol}</td>
     </tr>`;
   }).join('');
 }
@@ -785,8 +870,43 @@ function tryClassify() {
   };
   let extra = '';
   if (r.result) extra = `<div style="margin-top:8px">新代碼: <strong style="font-size:1.1rem">${r.result}</strong></div>`;
-  if (r.candidates) extra = `<div style="margin-top:8px">候選目的地: <strong>${r.candidates}</strong></div>`;
-  if (r.possible_new) extra = `<div style="margin-top:8px">可能的新位置: <strong>${r.possible_new}</strong></div>`;
+  if (r.candidates) {
+    const dests = r.destsWithNames || [];
+    const srcName = r.srcName || '';
+    extra = `<div style="margin-top:10px">
+      <div style="background:#fff;padding:6px 12px;border-radius:6px;border:1px solid #e0e0e0;margin-bottom:6px">
+        <span style="font-size:0.72rem;color:#e65100;font-weight:600">原始（已廢棄）</span>
+        <div style="font-weight:700">${r.original.substring(0,4)}</div>
+        ${srcName ? `<div style="font-size:0.82rem;color:#555">${srcName}</div>` : ''}
+      </div>
+      <div style="font-size:0.82rem;color:#555;margin-bottom:4px">請根據專利內容從以下候選中選擇：</div>
+      ${dests.map(d => `<div style="background:#fff;padding:6px 12px;border-radius:6px;border:1px solid #e0e0e0;margin-bottom:4px">
+        <span style="font-weight:700;color:#1565c0">${d.code}</span>
+        ${d.name ? `<span style="color:#555;margin-left:6px">${d.name}</span>` : ''}
+      </div>`).join('')}
+    </div>`;
+  }
+  if (r.possible_new) {
+    const srcT = r.srcTitle || '';
+    const dstT = r.dstTitle || '';
+    const srcSN = getSubName(code);
+    const dstSN = getSubName(r.possible_new);
+    extra = `<div style="margin-top:10px;display:flex;gap:8px;align-items:stretch">
+      <div style="flex:1;background:#fff;padding:8px 12px;border-radius:6px;border:1px solid #e0e0e0">
+        <div style="font-size:0.72rem;color:#c62828;font-weight:600">原始位置</div>
+        <div style="font-weight:700;margin:2px 0">${r.original}</div>
+        ${srcSN ? `<div style="font-size:0.8rem;color:#555">${srcSN}</div>` : ''}
+        ${srcT ? `<div style="font-size:0.82rem;color:#333;margin-top:2px">${srcT}</div>` : ''}
+      </div>
+      <div style="display:flex;align-items:center;font-size:1.2rem;color:#999">→</div>
+      <div style="flex:1;background:#fff;padding:8px 12px;border-radius:6px;border:1px solid #e0e0e0">
+        <div style="font-size:0.72rem;color:#1565c0;font-weight:600">可能的新位置</div>
+        <div style="font-weight:700;margin:2px 0;color:#1565c0">${r.possible_new}</div>
+        ${dstSN ? `<div style="font-size:0.8rem;color:#555">${dstSN}</div>` : ''}
+        ${dstT ? `<div style="font-size:0.82rem;color:#333;margin-top:2px">${dstT}</div>` : ''}
+      </div>
+    </div>`;
+  }
   const sub = code.trim().toUpperCase().substring(0, 4);
   area.innerHTML = `
     <div class="result-card ${r.action}">
