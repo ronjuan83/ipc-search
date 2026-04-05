@@ -189,6 +189,39 @@ body {
   border-radius: 10px;
   white-space: nowrap;
 }
+.tech-sugg-rank {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--received-color);
+  background: var(--received-bg);
+  padding: 1px 6px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.tech-results-split {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+.tech-result-col {
+  flex: 1;
+  min-width: 0;
+}
+.tech-result-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  padding: 2px 0;
+}
+.tech-ipccat-loading {
+  font-size: 0.8rem;
+  color: var(--text-light);
+  padding: 8px 0;
+}
+@media (max-width: 600px) {
+  .tech-results-split { flex-direction: column; gap: 8px; }
+}
 .tech-suggestions {
   margin-top: 8px;
 }
