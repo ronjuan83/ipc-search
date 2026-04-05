@@ -1131,15 +1131,24 @@ function TechClassifier({ onSearch }) {
   const [ipccatLoading, setIpccatLoading] = useState(false)
 
   useEffect(() => {
-    // Load group-level titles (7800+ main groups from WIPO XML)
-    fetch(`${import.meta.env.BASE_URL}ipc_group_titles.json`)
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setGroupTitles(d) })
-      .catch(() => {})
-    // Load tech keywords (503 subclass-level keyword sets)
+    // Load tech keywords FIRST (586KB) — enables Chinese search immediately
     fetch(`${import.meta.env.BASE_URL}tech_keywords.json`)
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setTechKeywords(d) })
+      .then(d => {
+        if (d) setTechKeywords(d)
+        // THEN load group titles (7.8MB) in background — enables English search
+        requestIdleCallback?.(() => {
+          fetch(`${import.meta.env.BASE_URL}ipc_group_titles.json`)
+            .then(r => r.ok ? r.json() : null)
+            .then(d => { if (d) setGroupTitles(d) })
+            .catch(() => {})
+        }) ?? setTimeout(() => {
+          fetch(`${import.meta.env.BASE_URL}ipc_group_titles.json`)
+            .then(r => r.ok ? r.json() : null)
+            .then(d => { if (d) setGroupTitles(d) })
+            .catch(() => {})
+        }, 100)
+      })
       .catch(() => {})
   }, [])
 
@@ -1472,7 +1481,7 @@ function TechClassifier({ onSearch }) {
     return () => clearTimeout(timer)
   }, [techInput])
 
-  if (!groupTitles) return null
+  if (!techKeywords) return null // Need at least techKeywords for Chinese search
 
   const isAbstract = techInput.trim().length > 50
   const hasChinese = /[^\x00-\x7F]/.test(techInput.trim())
