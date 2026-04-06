@@ -108,6 +108,13 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
   .exec-grid { grid-template-columns: 1fr; }
   .stats-row { grid-template-columns: repeat(2, 1fr); }
   .h01l-grid { grid-template-columns: 1fr; }
+  .scroll-box { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .sample-table { min-width: 700px; }
+}
+@media (max-width: 480px) {
+  nav > div { gap: 8px !important; padding: 0 10px !important; }
+  nav span:first-child { font-size: 0.82rem !important; }
+  nav a { font-size: 0.78rem !important; padding: 3px 7px !important; }
 }
 </style>
 </head>
@@ -488,7 +495,7 @@ I100004,20200801,G06F 3/01,科技公司
   </div>
 
   <p style="text-align:center;color:#999;font-size:0.78rem;margin-top:20px">
-    資料來源：WIPO IPC Concordance（IPC v6 → 2026.01）
+    資料來源：WIPO IPC Concordance（IPC v6 → 2026.01）｜ 更新日期：2026-04-06
   </p>
 </div>
 
@@ -1141,8 +1148,24 @@ function doAnalysis(lines, headers, delimiter, ipcIdx) {
       <div style="text-align:center;padding:10px;border-radius:8px;background:#fff3e0"><div style="font-size:1.3rem;font-weight:700;color:#e65100">${counts.review_deprecated}</div><div style="font-size:0.72rem;color:#666">需人工判斷 ${pct(counts.review_deprecated)}</div></div>
       <div style="text-align:center;padding:10px;border-radius:8px;background:#fce4ec"><div style="font-size:1.3rem;font-weight:700;color:#c62828">${counts.review_scope}</div><div style="font-size:0.72rem;color:#666">需確認範圍 ${pct(counts.review_scope)}</div></div>
     </div>
-    <button onclick="exportResults()" style="padding:6px 16px;background:#2e7d32;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem;font-weight:600">⬇ 匯出分析結果 CSV</button>
+    <button onclick="exportResults()" style="padding:6px 16px;background:#2e7d32;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem;font-weight:600;margin-bottom:12px">⬇ 匯出分析結果 CSV</button>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px;align-items:center">
+      <button onclick="filterUpload('all')" class="filter-btn active" style="border-color:#3498db;color:#3498db;font-size:0.75rem;padding:3px 8px">全部</button>
+      ${['A','B','C','D','E','F','G','H'].map(s => `<button onclick="filterUpload('${s}')" class="filter-btn" style="border-color:#3498db;color:#3498db;font-size:0.75rem;padding:3px 8px">${s}類</button>`).join('')}
+      <span style="color:#ccc">│</span>
+      <button onclick="toggleUploadChanged()" id="btn-upload-changed" class="filter-btn" style="border-color:#e91e63;color:#e91e63;font-size:0.75rem;padding:3px 8px">僅異動</button>
+      <span id="upload-table-count" style="font-size:0.72rem;color:#888;margin-left:4px"></span>
+    </div>
+    <div class="scroll-box" style="max-height:400px;margin-top:8px">
+      <table class="sample-table"><thead><tr><th>#</th><th>IPC</th><th>狀態</th><th>結果</th></tr></thead>
+      <tbody id="upload-tbody"></tbody></table>
+    </div>
   `;
+
+  // Render upload table
+  window._uploadFilterSection = 'all';
+  window._uploadFilterChanged = false;
+  renderUploadTable();
 
   // Store for export
   window._uploadResults = { headers, rows, ipcIdx };
@@ -1168,6 +1191,45 @@ function exportResults() {
   a.href = URL.createObjectURL(blob);
   a.download = 'reclassify_result.csv';
   a.click();
+}
+
+function filterUpload(sec) {
+  window._uploadFilterSection = sec;
+  renderUploadTable();
+}
+function toggleUploadChanged() {
+  window._uploadFilterChanged = !window._uploadFilterChanged;
+  const btn = document.getElementById('btn-upload-changed');
+  if (btn) {
+    if (window._uploadFilterChanged) { btn.classList.add('active'); btn.style.background = btn.style.borderColor; }
+    else { btn.classList.remove('active'); btn.style.background = '#fff'; }
+  }
+  renderUploadTable();
+}
+function renderUploadTable() {
+  const { rows } = window._uploadResults || {};
+  if (!rows) return;
+  const sec = window._uploadFilterSection;
+  const changedOnly = window._uploadFilterChanged;
+  const badge = { unchanged:'<span class="badge badge-unchanged">不需處理</span>', auto_replaced:'<span class="badge badge-auto">自動替換</span>', review_deprecated:'<span class="badge badge-deprecated">需人工判斷</span>', review_scope:'<span class="badge badge-scope">需確認範圍</span>' };
+  let filtered = rows;
+  if (sec !== 'all') filtered = filtered.filter(r => r.ipcValue.trim().toUpperCase().startsWith(sec));
+  if (changedOnly) filtered = filtered.filter(r => r.rowAction !== 'unchanged');
+  filtered.sort((a,b) => { const o={auto_replaced:0,review_deprecated:1,review_scope:2,unchanged:3}; return (o[a.rowAction]??9)-(o[b.rowAction]??9); });
+  const tbody = document.getElementById('upload-tbody');
+  if (tbody) {
+    tbody.innerHTML = filtered.map((r,i) => {
+      let res = '';
+      if (r.rowAction==='auto_replaced') res = r.rowResults.map(x=>x.result||x.original).join('; ');
+      else if (r.rowAction!=='unchanged') res = r.rowResults.map(x=>x.possible_new||x.candidates||'').filter(Boolean).join('; ');
+      return `<tr><td>${i+1}</td><td><code>${r.ipcValue}</code></td><td>${badge[r.rowAction]||''}</td><td style="font-size:0.78rem">${res}</td></tr>`;
+    }).join('');
+  }
+  const cnt = document.getElementById('upload-table-count');
+  if (cnt) {
+    const changed = filtered.filter(r=>r.rowAction!=='unchanged').length;
+    cnt.textContent = `${filtered.length} 筆（${changed} 異動）`;
+  }
 }
 
 function parseCSVLine(line, delimiter) {
