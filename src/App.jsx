@@ -1810,6 +1810,7 @@ export default function App() {
         <span className="site-nav-brand">IPC 工具</span>
         <a href={import.meta.env.BASE_URL} className="site-nav-link active">歷史查詢</a>
         <a href={`${import.meta.env.BASE_URL}reclassify.html`} className="site-nav-link">批次重分類</a>
+        <a href={`${import.meta.env.BASE_URL}reclassify-class.html`} className="site-nav-link">重分類三階</a>
         <a href="https://github.com/ronjuan83/ipc-search" target="_blank" rel="noreferrer" className="site-nav-github">GitHub</a>
       </div>
     </nav>
