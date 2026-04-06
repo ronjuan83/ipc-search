@@ -1710,6 +1710,11 @@ export default function App() {
     setInput(v)
     setShowSugg(false)
     pushUrl(v, selectedVersion)
+    // Scroll to results after a short delay for rendering
+    setTimeout(() => {
+      const card = document.querySelector('.subclass-card, .prefix-results')
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 100)
   }
 
   function handleKeyDown(e) {
@@ -1906,7 +1911,7 @@ export default function App() {
       </main>
 
       <footer className="app-footer">
-        資料來源：WIPO IPC 調和表（IPC v6 → 2026.01）
+        資料來源：WIPO IPC 調和表（IPC v6 → 2026.01）｜ 更新日期：2026-04-06
       </footer>
     </div>
     </>

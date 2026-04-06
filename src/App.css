@@ -45,6 +45,12 @@ html { overflow-y: scroll; } /* 防止頁面切換時捲軸出現/消失導致 n
   font-size: 0.8rem;
   margin-left: auto;
 }
+@media (max-width: 480px) {
+  .site-nav-inner { gap: 8px; padding: 0 10px; }
+  .site-nav-brand { font-size: 0.82rem; }
+  .site-nav-link { font-size: 0.78rem; padding: 3px 7px; }
+  .site-nav-github { font-size: 0.72rem; }
+}
 
 :root {
   --bg: #f8f9fa;
