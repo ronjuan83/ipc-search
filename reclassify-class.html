@@ -469,14 +469,17 @@ function renderVerDetail(vd) {
 function buildSubData() {
   if (Object.keys(subNames).length === 0) return;
   // Build subclass-level version map directly from exactLookup
+  // Only include cross-subclass transfers (skip same-subclass internal adjustments)
   const subVersions = {}; // sub → {ver: [{dst, src_group}]}
   for (const [srcGroup, info] of Object.entries(exactLookup)) {
     const sub = srcGroup.substring(0, 4);
+    const dst = info.dst.split(',')[0].split(' - ')[0].trim();
+    const dstSub = dst.substring(0, 4);
+    // Skip if dst is same subclass (internal adjustment, not a real move)
+    if (dstSub === sub) continue;
     if (!subVersions[sub]) subVersions[sub] = {};
     const ver = info.version;
     if (!subVersions[sub][ver]) subVersions[sub][ver] = [];
-    const dst = info.dst.split(',')[0].split(' - ')[0].trim();
-    const dstSub = dst.substring(0, 4);
     const dstName = getSubName(dst);
     subVersions[sub][ver].push({ src: srcGroup, dst, dstSub, dstName });
   }
