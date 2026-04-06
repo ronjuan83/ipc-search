@@ -57,7 +57,7 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
   <div class="card">
     <h2>總覽</h2>
     <div class="stats-row">
-      <div class="stat-box" style="background:#e8eaf6"><div class="num" id="n-total">-</div><div class="label">IPC Class 總數</div></div>
+      <div class="stat-box" style="background:#e8eaf6"><div class="num" id="n-total">-</div><div class="label">IPC Subclass 總數</div></div>
       <div class="stat-box" style="background:#fff3e0"><div class="num" id="n-changed" style="color:#e65100">-</div><div class="label">有異動</div></div>
       <div class="stat-box" style="background:#e8f5e9"><div class="num" id="n-unchanged" style="color:#2e7d32">-</div><div class="label">無異動</div></div>
     </div>
@@ -66,16 +66,18 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
   <div class="card">
     <h2>即時查詢 — 輸入 IPC Class</h2>
     <div class="try-input">
-      <input type="text" id="cls-input" placeholder="輸入三碼 class，如 H01、B23、G06" maxlength="3" />
+      <input type="text" id="cls-input" placeholder="輸入 IPC 代碼，如 H01、H01L、H01L 21/00" />
       <button onclick="tryQuery()">查詢</button>
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
       <button onclick="tryEx('H01')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">H01</button>
-      <button onclick="tryEx('G06')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">G06</button>
-      <button onclick="tryEx('B23')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">B23</button>
-      <button onclick="tryEx('C13')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">C13</button>
+      <button onclick="tryEx('H01L')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">H01L</button>
+      <button onclick="tryEx('H01L 21/00')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">H01L 21/00</button>
+      <button onclick="tryEx('B01F')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">B01F</button>
+      <button onclick="tryEx('C13C 3/02')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">C13C 3/02</button>
+      <button onclick="tryEx('F24J 2/46')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">F24J 2/46</button>
+      <button onclick="tryEx('G06F 3/01')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">G06F 3/01</button>
       <button onclick="tryEx('A22')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">A22</button>
-      <button onclick="tryEx('F24')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">F24</button>
     </div>
     <div id="query-result"></div>
   </div>
@@ -126,7 +128,7 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
   </div>
 
   <div class="card">
-    <h2>全部 Class 一覽</h2>
+    <h2>全部 Subclass 一覽</h2>
     <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
       <button onclick="filterAll('all')" class="filter-btn active" style="border-color:#3498db;color:#3498db" id="fb-all">全部</button>
       <button onclick="filterAll('A')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="fb-A">A</button>
@@ -143,7 +145,7 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
     </div>
     <div class="scroll-box">
       <table class="sample-table">
-        <thead><tr><th>Class</th><th>說明</th><th>狀態</th><th>版本異動細節</th></tr></thead>
+        <thead><tr><th>Subclass</th><th>說明</th><th>狀態</th><th>版本異動細節</th></tr></thead>
         <tbody id="class-tbody"></tbody>
       </table>
     </div>
@@ -368,6 +370,9 @@ Promise.all([
   }
   exactLookup = allD;
   runSimulation();
+  buildSubData();
+  updateStats();
+  renderTable();
   // Lazy load group titles for detail display
   fetch(BASE + 'ipc_group_titles.json').then(r => r.json()).then(titles => {
     if (Array.isArray(titles)) titles.forEach(t => { groupTitleMap[t.code] = t; });
@@ -380,12 +385,15 @@ function getGroupTitle(code) {
   return '';
 }
 
-// Stats
-const total = CLASS_DATA.length;
-const changed = CLASS_DATA.filter(c => c.a === 'has_changes').length;
-document.getElementById('n-total').textContent = total;
-document.getElementById('n-changed').textContent = changed;
-document.getElementById('n-unchanged').textContent = total - changed;
+// Stats - will be updated after subNames loads
+function updateStats() {
+  const t = SUB_DATA.length || Object.keys(subNames).length || CLASS_DATA.length;
+  const ch = SUB_DATA.length > 0 ? SUB_DATA.filter(c => c.a === 'has_changes').length : CLASS_DATA.filter(c => c.a === 'has_changes').length;
+  document.getElementById('n-total').textContent = t;
+  document.getElementById('n-changed').textContent = ch;
+  document.getElementById('n-unchanged').textContent = t - ch;
+}
+updateStats();
 
 // Table
 let _section = 'all';
@@ -455,13 +463,43 @@ function renderVerDetail(vd) {
   }).join('');
 }
 
+// Build subclass data from subNames + ipc_data (loaded in Promise.all)
+let SUB_DATA = [];
+function buildSubData() {
+  if (Object.keys(subNames).length === 0) return;
+  SUB_DATA = Object.keys(subNames).sort().map(sub => {
+    const name = typeof subNames[sub] === 'string' ? subNames[sub].substring(0,40) : '';
+    // Find matching CLASS_DATA entry for version details
+    const cls = sub.substring(0,3);
+    const classEntry = CLASS_DATA.find(x => x.c === cls);
+    // Check if THIS subclass has direct changes
+    const hasChanges = classEntry && classEntry.a === 'has_changes' && classEntry.vd;
+    // Filter vd entries that mention this subclass
+    let subVd = {};
+    if (hasChanges) {
+      for (const [ver, items] of Object.entries(classEntry.vd)) {
+        if (Array.isArray(items)) {
+          const relevant = items.filter(item =>
+            (item.s === sub) || (item.f === sub) || (item.to === sub) ||
+            (item.ds && item.ds.some(d => d.c === sub))
+          );
+          if (relevant.length > 0) subVd[ver] = relevant;
+        }
+      }
+    }
+    const action = Object.keys(subVd).length > 0 ? 'has_changes' : 'unchanged';
+    return { c: sub, d: name, a: action, vd: subVd };
+  });
+}
+
 function renderTable() {
-  let data = [...CLASS_DATA];
+  if (SUB_DATA.length === 0) buildSubData();
+  let data = [...SUB_DATA];
   if (_section !== 'all') data = data.filter(c => c.c.startsWith(_section));
   if (_changedOnly) data = data.filter(c => c.a === 'has_changes');
   data.sort((a, b) => (a.a === 'has_changes' ? 0 : 1) - (b.a === 'has_changes' ? 0 : 1) || a.c.localeCompare(b.c));
   const ch = data.filter(c => c.a === 'has_changes').length;
-  document.getElementById('table-count').textContent = `${data.length} 個 class（${ch} 有異動）`;
+  document.getElementById('table-count').textContent = `${data.length} 個 subclass（${ch} 有異動）`;
   document.getElementById('class-tbody').innerHTML = data.map(c => {
     const badge = c.a === 'has_changes' ? '<span class="badge badge-change">有異動</span>' : '<span class="badge badge-ok">無異動</span>';
     return `<tr>
@@ -472,31 +510,83 @@ function renderTable() {
     </tr>`;
   }).join('');
 }
-renderTable();
+// Defer renderTable until data loaded
+setTimeout(() => renderTable(), 100);
 
 // Query
 function tryEx(cls) { document.getElementById('cls-input').value = cls; tryQuery(); }
 function tryQuery() {
-  const cls = document.getElementById('cls-input').value.trim().toUpperCase().substring(0, 3);
-  if (!cls) return;
-  const c = CLASS_DATA.find(x => x.c === cls);
+  const raw = document.getElementById('cls-input').value.trim().toUpperCase();
+  if (!raw) return;
   const area = document.getElementById('query-result');
+
+  // Support both 3-char class (H01) and 4-char subclass (H01L) and full IPC (H01L 21/00)
+  const parsed = parseIPC(raw);
+  const sub4 = parsed ? parsed.sub : (raw.match(/^[A-H]\d{2}[A-Z]/) ? raw.substring(0,4) : null);
+  const cls3 = raw.substring(0, 3);
+
+  // If 4+ chars: do full 5-level classify on the code
+  if (sub4 || (parsed && parsed.group)) {
+    const code = parsed?.group || sub4 || raw;
+    const r = classify5(code);
+    const subName = getSubName(code);
+    const groupTitle = getGroupTitle(code);
+
+    if (r.action === 'unchanged') {
+      area.innerHTML = `<div class="result-card unchanged">
+        <div style="font-weight:700;font-size:1rem">無異動</div>
+        <div style="color:#555">${code}${subName ? ` — ${subName}` : ''}${groupTitle ? ` <span style="color:#888;font-size:0.85rem">${groupTitle}</span>` : ''}</div>
+        <div style="font-size:0.85rem;color:#888;margin-top:4px">此代碼在所有 IPC 版本中均無異動。</div>
+        <a href="./?ipc=${code.substring(0,4)}" style="display:inline-block;margin-top:6px;color:#3498db;font-size:0.85rem;text-decoration:none">在歷史查詢中查看 →</a>
+      </div>`;
+    } else {
+      const actionLabels = {
+        auto_replaced: '自動替換 — 原 subclass 已廢棄，有唯一對應的新代碼',
+        review_deprecated: '需人工判斷 — 原 subclass 已廢棄，有多個可能的新代碼',
+        review_scope: '需確認範圍 — 此組號的部分技術範圍已移至新位置',
+      };
+      let extra = '';
+      if (r.result) {
+        const newName = getSubName(r.result);
+        extra = `<div style="margin-top:8px"><strong>新代碼：</strong><span style="color:#1565c0;font-weight:700;font-size:1.1rem">${r.result}</span>${newName ? ` <span style="color:#555">${newName}</span>` : ''}</div>`;
+      }
+      if (r.candidates) {
+        const cands = r.candidates.split(',').map(c => c.trim());
+        extra = `<div style="margin-top:8px"><strong>候選：</strong></div>` +
+          cands.map(c => `<div style="margin-left:12px">→ <span style="color:#e65100;font-weight:600">${c}</span> <span style="color:#555">${getSubName(c)}</span></div>`).join('');
+      }
+      if (r.possible_new) {
+        const newName = getSubName(r.possible_new);
+        const newTitle = getGroupTitle(r.possible_new);
+        extra = `<div style="margin-top:8px"><strong>可能的新位置：</strong><span style="color:#c62828;font-weight:700">${r.possible_new}</span>${newName ? ` <span style="color:#555">${newName}</span>` : ''}${newTitle ? ` <span style="color:#888;font-size:0.82rem">${newTitle}</span>` : ''}</div>`;
+      }
+      area.innerHTML = `<div class="result-card ${r.action}">
+        <div style="font-weight:700;font-size:1rem">${actionLabels[r.action] || r.action}</div>
+        <div style="color:#555;margin-top:4px">${code}${subName ? ` — ${subName}` : ''}${groupTitle ? ` <span style="color:#888;font-size:0.85rem">${groupTitle}</span>` : ''}</div>
+        <div style="font-size:0.85rem;color:#777;margin-top:4px">${r.detail || ''}</div>
+        ${extra}
+        <a href="./?ipc=${code.substring(0,4)}" style="display:inline-block;margin-top:8px;color:#3498db;font-size:0.85rem;text-decoration:none">在歷史查詢中查看 ${code.substring(0,4)} 的完整異動 →</a>
+      </div>`;
+    }
+    return;
+  }
+
+  // 3-char class query (original logic)
+  const c = CLASS_DATA.find(x => x.c === cls3);
   if (!c) {
-    area.innerHTML = `<div class="result-card unchanged"><strong>${cls}</strong> — 未找到此 class</div>`;
+    area.innerHTML = `<div class="result-card unchanged"><strong>${cls3}</strong> — 未找到此 class</div>`;
     return;
   }
   if (c.a === 'unchanged') {
-    area.innerHTML = `<div class="result-card unchanged"><div style="font-weight:700;font-size:1rem">無異動</div><div style="color:#555">${cls} — ${c.d}</div><div style="font-size:0.85rem;color:#888;margin-top:4px">此 class 在所有 IPC 版本中均無異動。</div></div>`;
+    area.innerHTML = `<div class="result-card unchanged"><div style="font-weight:700;font-size:1rem">無異動</div><div style="color:#555">${cls3} — ${c.d}</div><div style="font-size:0.85rem;color:#888;margin-top:4px">此 class 在所有 IPC 版本中均無異動。</div></div>`;
   } else {
-    const vers = c.v.map(v => `<span style="display:inline-block;background:#fff;padding:2px 8px;border-radius:4px;border:1px solid #e0e0e0;font-size:0.82rem;margin:2px">${v}</span>`).join(' ');
-    const depHtml = c.dp.length > 0 ? `<div style="margin-top:8px;font-size:0.85rem;color:#c62828">含廢棄 subclass: ${c.dp.join(', ')}</div>` : '';
+    const vd = c.vd || {};
+    const verHtml = renderVerDetail(vd);
     area.innerHTML = `<div class="result-card has_changes">
       <div style="font-weight:700;font-size:1rem;color:#e65100">有異動</div>
-      <div style="color:#555;margin-bottom:8px">${cls} — ${c.d}</div>
-      <div style="font-size:0.85rem;color:#555">涉及 ${c.v.length} 個版本轉換、${c.n} 筆 group 級異動</div>
-      <div style="margin-top:6px">${vers}</div>
-      ${depHtml}
-      <a href="./?ipc=${cls}" style="display:inline-block;margin-top:8px;color:#3498db;font-size:0.85rem;text-decoration:none">在歷史查詢中查看 ${cls} 開頭的所有分類 →</a>
+      <div style="color:#555;margin-bottom:8px">${cls3} — ${c.d}</div>
+      <div style="margin-top:6px">${verHtml}</div>
+      <a href="./?ipc=${cls3}" style="display:inline-block;margin-top:8px;color:#3498db;font-size:0.85rem;text-decoration:none">在歷史查詢中查看 ${cls3} 開頭的所有分類 →</a>
     </div>`;
   }
 }
