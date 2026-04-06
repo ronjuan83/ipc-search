@@ -481,7 +481,10 @@ function buildSubData() {
     const ver = info.version;
     if (!subVersions[sub][ver]) subVersions[sub][ver] = [];
     const dstName = getSubName(dst);
-    subVersions[sub][ver].push({ src: srcGroup, dst, dstSub, dstName });
+    // Deduplicate by dstSub within same version
+    if (!subVersions[sub][ver].some(x => x.dstSub === dstSub)) {
+      subVersions[sub][ver].push({ src: srcGroup, dst, dstSub, dstName });
+    }
   }
   // Also add deprecated
   for (const [old, nv] of Object.entries(deprecatedSingle)) {
