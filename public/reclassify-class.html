@@ -157,6 +157,7 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
 </div>
 
 <script>
+var SUB_DATA = [];
 const CLASS_DATA = [
 {"c": "A01", "d": "農業或林業之整地；一般農業機械或農具之部件、零件或附件", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "int", "s": "A01B", "sn": "農業或林業之整地；一般農業機械或農具之部件、零件或"}, {"t": "int", "s": "A01D", "sn": "收獲；割草"}, {"t": "int", "s": "A01G", "sn": "園藝；蔬菜、花卉、稻、果樹、葡萄、啤酒花或海菜之栽"}], "2000.01→2006.01": [{"t": "int", "s": "A01N", "sn": "人體、動植物體或其局部之保存；殺生劑，例如作為消毒"}], "2017.01→2018.01": [{"t": "int", "s": "A01B", "sn": "農業或林業之整地；一般農業機械或農具之部件、零件或"}, {"t": "int", "s": "A01D", "sn": "收獲；割草"}]}},
 {"c": "A21", "d": "食品烤爐；焙烤用機械或設備", "a": "has_changes", "vd": {"2024.01→2025.01": [{"t": "cross", "f": "A21D", "fn": "焙烤用麵粉或麵糰之處理（如保存） ，如添加材料；焙", "to": "A23B", "tn": "保存，如用罐頭貯存肉、魚、蛋、水果、蔬菜、食用種籽"}, {"t": "int", "s": "A21D", "sn": "焙烤用麵粉或麵糰之處理（如保存） ，如添加材料；焙"}]}},
@@ -464,7 +465,7 @@ function renderVerDetail(vd) {
 }
 
 // Build subclass data from subNames + ipc_data (loaded in Promise.all)
-let SUB_DATA = [];
+// (declared early via var for hoisting — used in buildSubData before this line executes)
 function buildSubData() {
   if (Object.keys(subNames).length === 0) return;
   // Build subclass-level version map directly from exactLookup
