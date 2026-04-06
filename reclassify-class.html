@@ -113,6 +113,8 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
       <button onclick="simFilter('F')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="sf-F">F</button>
       <button onclick="simFilter('G')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="sf-G">G</button>
       <button onclick="simFilter('H')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="sf-H">H</button>
+      <span style="color:#ccc">│</span>
+      <button onclick="toggleSimChanged()" class="filter-btn" style="border-color:#e91e63;color:#e91e63" id="sf-changed">僅異動</button>
       <span id="sim-count" style="font-size:0.78rem;color:#888;margin-left:8px"></span>
     </div>
     <div class="scroll-box" style="max-height:400px">
@@ -141,7 +143,7 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
     </div>
     <div class="scroll-box">
       <table class="sample-table">
-        <thead><tr><th>Class</th><th>說明</th><th>狀態</th><th>涉及版本</th><th>異動數</th></tr></thead>
+        <thead><tr><th>Class</th><th>說明</th><th>狀態</th><th>版本異動細節</th></tr></thead>
         <tbody id="class-tbody"></tbody>
       </table>
     </div>
@@ -154,138 +156,139 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
 
 <script>
 const CLASS_DATA = [
-{c:'A01',d:'農業或林業之整地；一般農業機械或農具之部件、零件或附件',a:'has_changes',v:['1995.01→2000.01','2000.01→2006.01','2017.01→2018.01'],n:9,dp:[]},
-    {c:'A21',d:'食品烤爐；焙烤用機械或設備',a:'has_changes',v:['2000.01→2006.01','2024.01→2025.01'],n:7,dp:[]},
-    {c:'A22',d:'屠宰',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'A23',d:'保存，如用罐頭貯存肉、魚、蛋、水果、蔬菜、食用種籽；水果',a:'has_changes',v:['2000.01→2006.01','2020.01→2021.01','2024.01→2025.01'],n:107,dp:[]},
-    {c:'A24',d:'吸煙或嚼煙之製造或製備；煙草；鼻煙',a:'has_changes',v:['2019.01→2020.01'],n:2,dp:[]},
-    {c:'A41',d:'襯衣；內衣；嬰兒內衣；手帕',a:'has_changes',v:['1995.01→2000.01'],n:2,dp:[]},
-    {c:'A42',d:'帽子；頭部覆蓋物',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'A43',d:'鞋類的特徵；鞋類的部件',a:'has_changes',v:['2021.01→2022.01'],n:3,dp:[]},
-    {c:'A44',d:'鈕扣，別針，帶扣，拉鏈或類似物',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'A45',d:'手杖；傘；女用扇或類似物',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'A46',d:'刷類',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'A47',d:'桌子；寫字台；辦公傢俱；櫃櫥；抽屜；傢俱之一般零件',a:'has_changes',v:['1995.01→2000.01','2000.01→2006.01','2016.01→2017.01','2018.01→2019.01'],n:5,dp:[]},
-    {c:'A61',d:'診斷；外科；鑑定',a:'has_changes',v:['2000.01→2006.01','2012.01→2013.01','2013.01→2014.01','2021.01→2022.01'],n:39,dp:[]},
-    {c:'A62',d:'救生設備；救生裝置或救生方法',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'A63',d:'體育鍛練、體操、游泳、爬山或擊劍用之器械；球類；訓練設備',a:'has_changes',v:['1995.01→2000.01','2018.01→2019.01','2019.01→2020.01','2021.01→2022.01'],n:3,dp:[]},
-    {c:'A99',d:'本部其他類目中不包括的技術主題',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B01',d:'沸騰；沸騰裝置',a:'has_changes',v:['1995.01→2000.01','2000.01→2006.01','2016.01→2017.01','2021.01→2022.01'],n:43,dp:[]},
-    {c:'B02',d:'碾磨穀物之準備；利用加工表殼將穀粒精製成商品',a:'has_changes',v:['2000.01→2006.01'],n:3,dp:[]},
-    {c:'B03',d:'用液體或用風力搖床或風力跳汰機分離固體物料',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B04',d:'離心機',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B05',d:'噴射裝置；霧化裝置；噴嘴',a:'has_changes',v:['1995.01→2000.01'],n:1,dp:[]},
-    {c:'B06',d:'一般機械振動之發生或傳遞',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B07',d:'用細篩、粗篩、篩分或用氣流將固體由固體中分離；適用於散裝物',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B08',d:'一般清潔；一般污垢之防除',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B09',d:'固體廢物之處理',a:'has_changes',v:['1995.01→2000.01'],n:2,dp:[]},
-    {c:'B21',d:'金屬之軋製',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B22',d:'鑄造造模',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B23',d:'車削；搪削',a:'has_changes',v:['1995.01→2000.01'],n:6,dp:[]},
-    {c:'B24',d:'用於磨削或拋光之機床 、 裝置或工藝 ； 磨具磨損表面之修理',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B25',d:'其他類不包括的用於緊固、連接、拆卸、或夾持的工具或台式設備 ',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B26',d:'其他類不包括的手持切割工具',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B27',d:'用於木材或類似材料的鋸；其零件或附件',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B28',d:'黏土或其他陶瓷成分之成型 ；熔渣之成型 ；含有水泥材料之混合',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B29',d:'成型材料之準備或預處理；製作顆粒或預成型件；塑膠或包含塑膠',a:'has_changes',v:['2000.01→2006.01'],n:1,dp:[]},
-    {c:'B30',d:'PRESSES IN GENERAL',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B31',d:'紙盒、紙板箱、信封、紙袋或紙板袋之製作',a:'has_changes',v:['2016.01→2017.01'],n:6,dp:[]},
-    {c:'B32',d:'層狀產品，即由扁平的或非扁平的薄層，例如泡沫狀、蜂窩狀薄層',a:'has_changes',v:['2000.01→2006.01'],n:0,dp:[]},
-    {c:'B33',d:'積層製造，即利用添加的沉積、團聚或層疊，製造三維（3D）的物',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B41',d:'製版、排字或拆版還字用之機器或附件；鉛字；照相或光電排字裝',a:'has_changes',v:['1995.01→2000.01'],n:1,dp:[]},
-    {c:'B42',d:'單頁，成疊紙或書帖之永久性裝釘，或永久性將物品訂於其上',a:'has_changes',v:['2013.01→2014.01'],n:0,dp:[]},
-    {c:'B43',d:'書寫或繪圖器具',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B44',d:'用於藝術製品之機器 ，設備或工具 ，例如用於雕塑 ，扭索飾，',a:'has_changes',v:['1995.01→2000.01','2013.01→2014.01'],n:2,dp:[]},
-    {c:'B60',d:'車輪；腳輪；車輪或腳輪的軸；車輪附著力之提高',a:'has_changes',v:['1995.01→2000.01','2000.01→2006.01','2018.01→2019.01','2019.01→2020.01'],n:13,dp:[]},
-    {c:'B61',d:'RAILWAY SYSTEMS',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B62',d:'HAND-PROPELLED VEHICLES, e.g. HAND CARTS',a:'has_changes',v:['1995.01→2000.01','2012.01→2013.01'],n:0,dp:[]},
-    {c:'B63',d:'SHIPS OR OTHER WATERBORNE VESSELS',a:'has_changes',v:['2019.01→2020.01'],n:0,dp:[]},
-    {c:'B64',d:'LIGHTER-THAN-AIR AIRCRAFT',a:'has_changes',v:['2019.01→2020.01','2022.01→2023.01'],n:7,dp:[]},
-    {c:'B65',d:'MACHINES, APPARATUS OR DEVICES FOR, OR M',a:'has_changes',v:['2000.01→2006.01'],n:2,dp:[]},
-    {c:'B66',d:'ELEVATORS',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B67',d:'APPLYING CLOSURE MEMBERS TO BOTTLES, JAR',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B68',d:'HARNESS',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'B81',d:'微結構裝置或系統',a:'has_changes',v:['1995.01→2000.01'],n:0,dp:[]},
-    {c:'B82',d:'NANOSTRUCTURES FORMED BY MANIPULATION OF',a:'has_changes',v:['1995.01→2000.01'],n:0,dp:[]},
-    {c:'B99',d:'SUBJECT MATTER NOT OTHERWISE PROVIDED FO',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'C01',d:'非金屬元素；其化合物',a:'has_changes',v:['2016.01→2017.01'],n:1,dp:[]},
-    {c:'C02',d:'水、廢水、污水或污泥之處理',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'C03',d:'玻璃、礦棉或渣棉之製造或成型；玻璃、礦棉或渣棉之製造或成',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'C04',d:'石灰；氧化鎂；礦渣；水泥；其組合物，例如砂漿、混凝土或類',a:'has_changes',v:['2000.01→2006.01'],n:1,dp:[]},
-    {c:'C05',d:'磷肥',a:'has_changes',v:['2017.01→2018.01'],n:1,dp:[]},
-    {c:'C06',d:'炸藥或熱劑之組合物；其製造；用單種物質作炸藥',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'C07',d:'有機化學之一般方法；及所用的裝置',a:'has_changes',v:['2010.01→2011.01'],n:1,dp:[]},
-    {c:'C08',d:'多糖類；其衍生物',a:'has_changes',v:['2010.01→2011.01'],n:0,dp:[]},
-    {c:'C09',d:'有機染料或用於製造染料之有關化合物；媒染劑；色澱',a:'has_changes',v:['2000.01→2006.01','2021.01→2022.01'],n:2,dp:[]},
-    {c:'C10',d:'含碳物料之乾餾生產煤氣、焦炭、焦油或類似物',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'C11',d:'生產，例如由原料中壓榨或由廢料內萃取、精製或保存脂肪、脂',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'C12',d:'啤酒；用發酵製備啤酒；用於製造啤酒之麥芽之製備；用於製造',a:'has_changes',v:['2018.01→2019.01'],n:5,dp:[]},
-    {c:'C13',d:'蔗糖之生產；及其專門適用的設備',a:'has_changes',v:['2010.01→2011.01'],n:48,dp:['C13C','C13D','C13F','C13G','C13H','C13J']},
-    {c:'C14',d:'小原皮；大原皮及皮革之一般機械處理或加工；毛皮剪切機械；',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'C21',d:'鐵或鋼之冶金',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'C22',d:'金屬之生產或精煉；原材料之預處理',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'C23',d:'對金屬材料之鍍覆；用金屬材料對材料之鍍覆；表面擴散法，化',a:'has_changes',v:['1995.01→2000.01'],n:2,dp:[]},
-    {c:'C25',d:'生產化合物或非金屬之電解工藝或電泳工藝；其所用的設備',a:'has_changes',v:['1995.01→2000.01'],n:1,dp:[]},
-    {c:'C30',d:'晶體生長；共晶材料之定向凝固或共析材料之定向分層；材料之',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'C40',d:'組合化學；化合物庫，如化學庫',a:'has_changes',v:['2000.01→2006.01','2018.01→2019.01'],n:4,dp:[]},
-    {c:'C99',d:'本部其他類目中不包括的技術主題',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'D01',d:'為生產纖維或長絲而對天然纖維或長絲原料進行的機械處理，如紡',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'D02',d:'纖維、長絲、紗或線的卷曲；紗或線',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'D03',d:'開口機構；紋板或紋鏈；紋板沖孔；花型設計',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'D04',d:'針織',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'D05',d:'縫紉',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'D06',d:'使用液相、氣相或蒸汽處理紡織材料',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'D07',d:'一般的繩或纜',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'D21',d:'纖維原料或其機械處理',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'D99',d:'本部其他類目中不包括的技術主題',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'E01',d:'鐵路軌道；鐵路軌道附件；鋪設各種鐵路之機器',a:'has_changes',v:['1995.01→2000.01','2000.01→2006.01'],n:1,dp:[]},
-    {c:'E02',d:'水利工程',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'E03',d:'取水、集水或配水之裝置或方法',a:'has_changes',v:['2000.01→2006.01','2018.01→2019.01'],n:0,dp:[]},
-    {c:'E04',d:'一般建築物構造；牆，例如，間壁牆；屋頂；樓板；頂棚；建築物',a:'has_changes',v:['2000.01→2006.01','2013.01→2014.01','2017.01→2018.01'],n:3,dp:[]},
-    {c:'E05',d:'鎖；其附件；手銬',a:'has_changes',v:['2016.01→2017.01'],n:1,dp:[]},
-    {c:'E06',d:'於建築物、車輛、圍欄或類似圍繞物之開口處用的固定式或移動式',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'E21',d:'土壤或岩石的鑽探；從井中開採油、氣、水、可溶解或可溶性物質',a:'has_changes',v:['1995.01→2000.01','2000.01→2006.01'],n:52,dp:[]},
-    {c:'E99',d:'本部其他類目中不包括的技術主題',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'F01',d:'一般的或變容式之機器或發動機，如蒸汽機',a:'has_changes',v:['1995.01→2000.01'],n:0,dp:[]},
-    {c:'F02',d:'活塞式內燃機；一般燃燒發動機',a:'has_changes',v:['1995.01→2000.01'],n:1,dp:[]},
-    {c:'F03',d:'液力機械或液力發動機',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'F04',d:'液體變容式機械；泵',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'F15',d:'一般流體工作系統；流體壓力執行機構，如伺服馬達；其他類不包',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'F16',d:'緊固或固定構件或機器零件用之器件，如釘、螺栓、簧環、夾、卡',a:'has_changes',v:['1995.01→2000.01'],n:0,dp:[]},
-    {c:'F17',d:'可調容量之貯氣罐',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'F21',d:'非電的照明用具或系統',a:'has_changes',v:['1995.01→2000.01','2015.01→2016.01'],n:58,dp:['F21L','F21M','F21P','F21Q','F21H']},
-    {c:'F22',d:'蒸汽之發生方法；蒸汽鍋爐',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'F23',d:'僅用固體燃料之燃燒方法或設備',a:'has_changes',v:['2000.01→2006.01'],n:2,dp:[]},
-    {c:'F24',d:'使用固體燃料的家用爐或灶；與爐或灶相結合使用的構件工具',a:'has_changes',v:['2013.01→2014.01','2017.01→2018.01'],n:40,dp:['F24J']},
-    {c:'F25',d:'冷凍機，冷凍設備或系統；加熱及冷凍之聯合系統、熱泵系統',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'F26',d:'從固體材料或製品中消除液體之乾燥',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'F27',d:'一般爐、窯、烘烤爐或蒸餾爐；開放式燒結設備或類似設備',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'F28',d:'水蒸汽或其他蒸汽冷凝器',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'F41',d:'對於輕武器與火炮，例如加農炮，兩者通用的功能特徵或零部件；',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'F42',d:'爆炸裝藥，例如用於爆破；煙火；彈藥',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'F99',d:'本部其他類目中不包括的技術主題',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'G01',d:'長度、厚度或類似線性尺寸之計量；角度之計量；面積之計量；不',a:'has_changes',v:['1995.01→2000.01','2000.01→2006.01','2009.01→2010.01','2010.01→2011.01','2011.01→2012.01','2012.01→2013.01','2013.01→2014.01','2019.01→2020.01'],n:37,dp:[]},
-    {c:'G02',d:'光學元件或系統或儀器',a:'has_changes',v:['1995.01→2000.01','2017.01→2018.01','2020.01→2021.01'],n:34,dp:[]},
-    {c:'G03',d:'攝影、放映或觀看用的裝置或設備；利用光波以外其他波之類似技',a:'has_changes',v:['1995.01→2000.01','2020.01→2021.01'],n:1,dp:[]},
-    {c:'G04',d:'機械驅動的鐘或錶；一般鐘或錶之機械零部件；應用太陽，月亮，',a:'has_changes',v:['2012.01→2013.01'],n:5,dp:[]},
-    {c:'G05',d:'一般的控制或調節系統及其功能單元；用於系統或單元之監視或測',a:'has_changes',v:['1995.01→2000.01','2019.01→2020.01','2023.01→2024.01'],n:4,dp:[]},
-    {c:'G06',d:'一切計算均以機械方式實現的數位計算機',a:'has_changes',v:['1995.01→2000.01','2000.01→2006.01','2017.01→2018.01','2018.01→2019.01','2021.01→2022.01','2022.01→2023.01','2023.01→2024.01'],n:76,dp:['G06C','G06E','G06G','G06J','G06D']},
-    {c:'G07',d:'售票設備；車費計；用於一個或多個管制點收票價、通行費或入場',a:'has_changes',v:['1995.01→2000.01'],n:4,dp:[]},
-    {c:'G08',d:'SIGNALLING SYSTEMS, e.g. PERSONAL CALLIN',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'G09',d:'教育或演示用具；用於教育或與盲人、聾人或啞人通信之用具；模',a:'has_changes',v:['1995.01→2000.01'],n:1,dp:[]},
-    {c:'G10',d:'風琴，簧風琴或具有相關吹氣機構之類似管樂器',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'G11',d:'基於記錄載體與轉換器之間之相對運動而實現的資訊儲存',a:'has_changes',v:['1995.01→2000.01','2000.01→2006.01'],n:3,dp:[]},
-    {c:'G12',d:'CONSTRUCTIONAL DETAILS OF INSTRUMENTS, O',a:'has_changes',v:['1995.01→2000.01','2009.01→2010.01'],n:10,dp:[]},
-    {c:'G16',d:'BIOINFORMATICS, i.e. INFORMATION AND COM',a:'has_changes',v:['2017.01→2018.01','2018.01→2019.01'],n:0,dp:[]},
-    {c:'G21',d:'FUSION REACTORS',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'G99',d:'SUBJECT MATTER NOT OTHERWISE PROVIDED FO',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'H01',d:'電纜；導體；絕緣體；材料之導電，絕緣或介電性能之選擇',a:'has_changes',v:['1995.01→2000.01','2000.01→2006.01','2010.01→2011.01','2013.01→2014.01','2019.01→2020.01','2022.01→2023.01','2024.01→2025.01','2025.01→2026.01'],n:666,dp:[]},
-    {c:'H02',d:'電力供電或配電用之配電盤、變電站或開關裝置',a:'has_changes',v:['1995.01→2000.01','2013.01→2014.01'],n:5,dp:[]},
-    {c:'H03',d:'使用工作於非開關狀態之主動元件電路，直接或經頻率變換產生',a:'has_changes',v:['1995.01→2000.01'],n:4,dp:[]},
-    {c:'H04',d:'傳輸',a:'has_changes',v:['1995.01→2000.01','2008.04→2009.01','2010.01→2011.01','2017.01→2018.01','2023.01→2024.01'],n:27,dp:[]},
-    {c:'H05',d:'電熱；其他類目不包括的電光源；電光源的一般電路配置',a:'unchanged',v:[],n:0,dp:[]},
-    {c:'H10',d:'電子儲存設備',a:'has_changes',v:['2022.01→2023.01','2024.01→2025.01','2025.01→2026.01'],n:0,dp:[]},
-    {c:'H99',d:'本部其他類目中不包括的技術主題',a:'unchanged',v:[],n:0,dp:[]}];
+  {c:'A01',d:'農業或林業之整地；一般農業機械或農具之部件、零件或附件',a:'has_changes',vd:{'1995.01→2000.01':'3筆內部調整','2000.01→2006.01':'1筆內部調整','2017.01→2018.01':'2筆內部調整'}},
+  {c:'A21',d:'食品烤爐；焙烤用機械或設備',a:'has_changes',vd:{'2024.01→2025.01':'移至A23B; 1筆內部調整'}},
+  {c:'A22',d:'屠宰',a:'unchanged',vd:{}},
+  {c:'A23',d:'保存，如用罐頭貯存肉、魚、蛋、水果、蔬菜、食用種籽；水果',a:'has_changes',vd:{'2000.01→2006.01':'移至A21D','2020.01→2021.01':'1筆內部調整','2024.01→2025.01':'5筆內部調整'}},
+  {c:'A24',d:'吸煙或嚼煙之製造或製備；煙草；鼻煙',a:'has_changes',vd:{'2019.01→2020.01':'1筆內部調整'}},
+  {c:'A41',d:'襯衣；內衣；嬰兒內衣；手帕',a:'has_changes',vd:{'1995.01→2000.01':'移至A63B; 1筆內部調整'}},
+  {c:'A42',d:'帽子；頭部覆蓋物',a:'unchanged',vd:{}},
+  {c:'A43',d:'鞋類的特徵；鞋類的部件',a:'has_changes',vd:{'2021.01→2022.01':'移至A61F、A63H; 1筆內部調整'}},
+  {c:'A44',d:'鈕扣，別針，帶扣，拉鏈或類似物',a:'unchanged',vd:{}},
+  {c:'A45',d:'手杖；傘；女用扇或類似物',a:'unchanged',vd:{}},
+  {c:'A46',d:'刷類',a:'unchanged',vd:{}},
+  {c:'A47',d:'桌子；寫字台；辦公傢俱；櫃櫥；抽屜；傢俱之一般零件',a:'has_changes',vd:{'1995.01→2000.01':'移至F21S','2000.01→2006.01':'移至G06F; 1筆內部調整','2018.01→2019.01':'1筆內部調整'}},
+  {c:'A61',d:'診斷；外科；鑑定',a:'has_changes',vd:{'2000.01→2006.01':'4筆內部調整','2012.01→2013.01':'2筆內部調整','2013.01→2014.01':'1筆內部調整'}},
+  {c:'A62',d:'救生設備；救生裝置或救生方法',a:'unchanged',vd:{}},
+  {c:'A63',d:'體育鍛練、體操、游泳、爬山或擊劍用之器械；球類；訓練設備',a:'has_changes',vd:{'2018.01→2019.01':'1筆內部調整','2019.01→2020.01':'移至B63H'}},
+  {c:'A99',d:'本部其他類目中不包括的技術主題',a:'unchanged',vd:{}},
+  {c:'B01',d:'沸騰；沸騰裝置',a:'has_changes',vd:{'1995.01→2000.01':'移至B81B、B81C、B82B','2000.01→2006.01':'移至C40B、G01N; 2筆內部調整','2021.01→2022.01':'移至C09K'}},
+  {c:'B02',d:'碾磨穀物之準備；利用加工表殼將穀粒精製成商品',a:'has_changes',vd:{'2000.01→2006.01':'移至B29B; 1筆內部調整'}},
+  {c:'B03',d:'用液體或用風力搖床或風力跳汰機分離固體物料',a:'unchanged',vd:{}},
+  {c:'B04',d:'離心機',a:'unchanged',vd:{}},
+  {c:'B05',d:'噴射裝置；霧化裝置；噴嘴',a:'has_changes',vd:{'1995.01→2000.01':'移至B81B'}},
+  {c:'B06',d:'一般機械振動之發生或傳遞',a:'unchanged',vd:{}},
+  {c:'B07',d:'用細篩、粗篩、篩分或用氣流將固體由固體中分離；適用於散裝物',a:'unchanged',vd:{}},
+  {c:'B08',d:'一般清潔；一般污垢之防除',a:'unchanged',vd:{}},
+  {c:'B09',d:'固體廢物之處理',a:'has_changes',vd:{'1995.01→2000.01':'移至B62D'}},
+  {c:'B21',d:'金屬之軋製',a:'unchanged',vd:{}},
+  {c:'B22',d:'鑄造造模',a:'unchanged',vd:{}},
+  {c:'B23',d:'車削；搪削',a:'has_changes',vd:{'1995.01→2000.01':'移至B81C; 1筆內部調整'}},
+  {c:'B24',d:'用於磨削或拋光之機床 、 裝置或工藝 ； 磨具磨損表面之修理',a:'unchanged',vd:{}},
+  {c:'B25',d:'其他類不包括的用於緊固、連接、拆卸、或夾持的工具或台式設備 ',a:'unchanged',vd:{}},
+  {c:'B26',d:'其他類不包括的手持切割工具',a:'unchanged',vd:{}},
+  {c:'B27',d:'用於木材或類似材料的鋸；其零件或附件',a:'unchanged',vd:{}},
+  {c:'B28',d:'黏土或其他陶瓷成分之成型 ；熔渣之成型 ；含有水泥材料之混合',a:'unchanged',vd:{}},
+  {c:'B29',d:'成型材料之準備或預處理；製作顆粒或預成型件；塑膠或包含塑膠',a:'has_changes',vd:{'2000.01→2006.01':'移至B32B'}},
+  {c:'B30',d:'PRESSES IN GENERAL',a:'unchanged',vd:{}},
+  {c:'B31',d:'紙盒、紙板箱、信封、紙袋或紙板袋之製作',a:'has_changes',vd:{'2016.01→2017.01':'1筆內部調整'}},
+  {c:'B32',d:'層狀產品，即由扁平的或非扁平的薄層，例如泡沫狀、蜂窩狀薄層',a:'unchanged',vd:{}},
+  {c:'B33',d:'積層製造，即利用添加的沉積、團聚或層疊，製造三維（3D）的物',a:'unchanged',vd:{}},
+  {c:'B41',d:'製版、排字或拆版還字用之機器或附件；鉛字；照相或光電排字裝',a:'has_changes',vd:{'1995.01→2000.01':'移至B81C'}},
+  {c:'B42',d:'單頁，成疊紙或書帖之永久性裝釘，或永久性將物品訂於其上',a:'unchanged',vd:{}},
+  {c:'B43',d:'書寫或繪圖器具',a:'unchanged',vd:{}},
+  {c:'B44',d:'用於藝術製品之機器 ，設備或工具 ，例如用於雕塑 ，扭索飾，',a:'has_changes',vd:{'1995.01→2000.01':'移至B81C','2013.01→2014.01':'移至B42D'}},
+  {c:'B60',d:'車輪；腳輪；車輪或腳輪的軸；車輪附著力之提高',a:'has_changes',vd:{'1995.01→2000.01':'移至F21S','2000.01→2006.01':'1筆內部調整','2018.01→2019.01':'2筆內部調整','2019.01→2020.01':'移至B63H'}},
+  {c:'B61',d:'RAILWAY SYSTEMS',a:'unchanged',vd:{}},
+  {c:'B62',d:'HAND-PROPELLED VEHICLES, e.g. HAND CARTS',a:'unchanged',vd:{}},
+  {c:'B63',d:'SHIPS OR OTHER WATERBORNE VESSELS',a:'unchanged',vd:{}},
+  {c:'B64',d:'LIGHTER-THAN-AIR AIRCRAFT',a:'has_changes',vd:{'2019.01→2020.01':'移至B63H','2022.01→2023.01':'1筆內部調整'}},
+  {c:'B65',d:'MACHINES, APPARATUS OR DEVICES FOR, OR M',a:'has_changes',vd:{'2000.01→2006.01':'移至A47G、H01L'}},
+  {c:'B66',d:'ELEVATORS',a:'unchanged',vd:{}},
+  {c:'B67',d:'APPLYING CLOSURE MEMBERS TO BOTTLES, JAR',a:'unchanged',vd:{}},
+  {c:'B68',d:'HARNESS',a:'unchanged',vd:{}},
+  {c:'B81',d:'微結構裝置或系統',a:'unchanged',vd:{}},
+  {c:'B82',d:'NANOSTRUCTURES FORMED BY MANIPULATION OF',a:'unchanged',vd:{}},
+  {c:'B99',d:'SUBJECT MATTER NOT OTHERWISE PROVIDED FO',a:'unchanged',vd:{}},
+  {c:'C01',d:'非金屬元素；其化合物',a:'has_changes',vd:{'2016.01→2017.01':'移至B01J'}},
+  {c:'C02',d:'水、廢水、污水或污泥之處理',a:'unchanged',vd:{}},
+  {c:'C03',d:'玻璃、礦棉或渣棉之製造或成型；玻璃、礦棉或渣棉之製造或成',a:'unchanged',vd:{}},
+  {c:'C04',d:'石灰；氧化鎂；礦渣；水泥；其組合物，例如砂漿、混凝土或類',a:'has_changes',vd:{'2000.01→2006.01':'移至C09K'}},
+  {c:'C05',d:'磷肥',a:'has_changes',vd:{'2017.01→2018.01':'移至A01G'}},
+  {c:'C06',d:'炸藥或熱劑之組合物；其製造；用單種物質作炸藥',a:'unchanged',vd:{}},
+  {c:'C07',d:'有機化學之一般方法；及所用的裝置',a:'has_changes',vd:{'2010.01→2011.01':'1筆內部調整'}},
+  {c:'C08',d:'多糖類；其衍生物',a:'unchanged',vd:{}},
+  {c:'C09',d:'有機染料或用於製造染料之有關化合物；媒染劑；色澱',a:'has_changes',vd:{'2000.01→2006.01':'移至A61K、C04B'}},
+  {c:'C10',d:'含碳物料之乾餾生產煤氣、焦炭、焦油或類似物',a:'unchanged',vd:{}},
+  {c:'C11',d:'生產，例如由原料中壓榨或由廢料內萃取、精製或保存脂肪、脂',a:'unchanged',vd:{}},
+  {c:'C12',d:'啤酒；用發酵製備啤酒；用於製造啤酒之麥芽之製備；用於製造',a:'has_changes',vd:{'2018.01→2019.01':'2筆內部調整'}},
+  {c:'C13',d:'蔗糖之生產；及其專門適用的設備',a:'has_changes',vd:{'2010.01→2011.01':'6筆內部調整','2011.01':'C13C廢棄→C13B; C13J廢棄→C13B; C13F廢棄→C13B'}},
+  {c:'C14',d:'小原皮；大原皮及皮革之一般機械處理或加工；毛皮剪切機械；',a:'unchanged',vd:{}},
+  {c:'C21',d:'鐵或鋼之冶金',a:'unchanged',vd:{}},
+  {c:'C22',d:'金屬之生產或精煉；原材料之預處理',a:'unchanged',vd:{}},
+  {c:'C23',d:'對金屬材料之鍍覆；用金屬材料對材料之鍍覆；表面擴散法，化',a:'has_changes',vd:{'1995.01→2000.01':'移至B81C'}},
+  {c:'C25',d:'生產化合物或非金屬之電解工藝或電泳工藝；其所用的設備',a:'has_changes',vd:{'1995.01→2000.01':'移至B81C'}},
+  {c:'C30',d:'晶體生長；共晶材料之定向凝固或共析材料之定向分層；材料之',a:'unchanged',vd:{}},
+  {c:'C40',d:'組合化學；化合物庫，如化學庫',a:'has_changes',vd:{'2000.01→2006.01':'移至B01J','2018.01→2019.01':'移至G16B'}},
+  {c:'C99',d:'本部其他類目中不包括的技術主題',a:'unchanged',vd:{}},
+  {c:'D01',d:'為生產纖維或長絲而對天然纖維或長絲原料進行的機械處理，如紡',a:'unchanged',vd:{}},
+  {c:'D02',d:'纖維、長絲、紗或線的卷曲；紗或線',a:'unchanged',vd:{}},
+  {c:'D03',d:'開口機構；紋板或紋鏈；紋板沖孔；花型設計',a:'unchanged',vd:{}},
+  {c:'D04',d:'針織',a:'unchanged',vd:{}},
+  {c:'D05',d:'縫紉',a:'unchanged',vd:{}},
+  {c:'D06',d:'使用液相、氣相或蒸汽處理紡織材料',a:'unchanged',vd:{}},
+  {c:'D07',d:'一般的繩或纜',a:'unchanged',vd:{}},
+  {c:'D21',d:'纖維原料或其機械處理',a:'unchanged',vd:{}},
+  {c:'D99',d:'本部其他類目中不包括的技術主題',a:'unchanged',vd:{}},
+  {c:'E01',d:'鐵路軌道；鐵路軌道附件；鋪設各種鐵路之機器',a:'has_changes',vd:{'1995.01→2000.01':'移至A01D'}},
+  {c:'E02',d:'水利工程',a:'unchanged',vd:{}},
+  {c:'E03',d:'取水、集水或配水之裝置或方法',a:'unchanged',vd:{}},
+  {c:'E04',d:'一般建築物構造；牆，例如，間壁牆；屋頂；樓板；頂棚；建築物',a:'has_changes',vd:{'2000.01→2006.01':'移至E01D','2013.01→2014.01':'1筆內部調整','2017.01→2018.01':'1筆內部調整'}},
+  {c:'E05',d:'鎖；其附件；手銬',a:'has_changes',vd:{'2016.01→2017.01':'移至A47B'}},
+  {c:'E06',d:'於建築物、車輛、圍欄或類似圍繞物之開口處用的固定式或移動式',a:'unchanged',vd:{}},
+  {c:'E21',d:'土壤或岩石的鑽探；從井中開採油、氣、水、可溶解或可溶性物質',a:'has_changes',vd:{'1995.01→2000.01':'1筆內部調整','2000.01→2006.01':'移至C09K'}},
+  {c:'E99',d:'本部其他類目中不包括的技術主題',a:'unchanged',vd:{}},
+  {c:'F01',d:'一般的或變容式之機器或發動機，如蒸汽機',a:'unchanged',vd:{}},
+  {c:'F02',d:'活塞式內燃機；一般燃燒發動機',a:'has_changes',vd:{'1995.01→2000.01':'移至F01N'}},
+  {c:'F03',d:'液力機械或液力發動機',a:'unchanged',vd:{}},
+  {c:'F04',d:'液體變容式機械；泵',a:'unchanged',vd:{}},
+  {c:'F15',d:'一般流體工作系統；流體壓力執行機構，如伺服馬達；其他類不包',a:'unchanged',vd:{}},
+  {c:'F16',d:'緊固或固定構件或機器零件用之器件，如釘、螺栓、簧環、夾、卡',a:'unchanged',vd:{}},
+  {c:'F17',d:'可調容量之貯氣罐',a:'unchanged',vd:{}},
+  {c:'F21',d:'非電的照明用具或系統',a:'has_changes',vd:{'1995.01→2000.01':'移至H01J; 7筆內部調整','2000.01':'F21H廢棄→F21V; F21M廢棄→F21S, F21V; F21P廢棄→F21S, F21V','2015.01→2016.01':'1筆內部調整'}},
+  {c:'F22',d:'蒸汽之發生方法；蒸汽鍋爐',a:'unchanged',vd:{}},
+  {c:'F23',d:'僅用固體燃料之燃燒方法或設備',a:'has_changes',vd:{'2000.01→2006.01':'2筆內部調整'}},
+  {c:'F24',d:'使用固體燃料的家用爐或灶；與爐或灶相結合使用的構件工具',a:'has_changes',vd:{'2013.01→2014.01':'1筆內部調整','2017.01→2018.01':'1筆內部調整','2018.01':'F24J廢棄→F24S, F24T, F24V'}},
+  {c:'F25',d:'冷凍機，冷凍設備或系統；加熱及冷凍之聯合系統、熱泵系統',a:'unchanged',vd:{}},
+  {c:'F26',d:'從固體材料或製品中消除液體之乾燥',a:'unchanged',vd:{}},
+  {c:'F27',d:'一般爐、窯、烘烤爐或蒸餾爐；開放式燒結設備或類似設備',a:'unchanged',vd:{}},
+  {c:'F28',d:'水蒸汽或其他蒸汽冷凝器',a:'unchanged',vd:{}},
+  {c:'F41',d:'對於輕武器與火炮，例如加農炮，兩者通用的功能特徵或零部件；',a:'unchanged',vd:{}},
+  {c:'F42',d:'爆炸裝藥，例如用於爆破；煙火；彈藥',a:'unchanged',vd:{}},
+  {c:'F99',d:'本部其他類目中不包括的技術主題',a:'unchanged',vd:{}},
+  {c:'G01',d:'長度、厚度或類似線性尺寸之計量；角度之計量；面積之計量；不',a:'has_changes',vd:{'1995.01→2000.01':'移至B81B、B81C、B82B; 1筆內部調整','2000.01→2006.01':'移至B01J; 2筆內部調整','2009.01→2010.01':'1筆內部調整','2010.01→2011.01':'移至H01T','2011.01→2012.01':'1筆內部調整','2012.01→2013.01':'1筆內部調整','2013.01→2014.01':'1筆內部調整','2019.01→2020.01':'移至H01T; 1筆內部調整'}},
+  {c:'G02',d:'光學元件或系統或儀器',a:'has_changes',vd:{'1995.01→2000.01':'移至B81B、G01N','2020.01→2021.01':'1筆內部調整'}},
+  {c:'G03',d:'攝影、放映或觀看用的裝置或設備；利用光波以外其他波之類似技',a:'has_changes',vd:{'1995.01→2000.01':'移至B81C'}},
+  {c:'G04',d:'機械驅動的鐘或錶；一般鐘或錶之機械零部件；應用太陽，月亮，',a:'has_changes',vd:{'2012.01→2013.01':'2筆內部調整'}},
+  {c:'G05',d:'一般的控制或調節系統及其功能單元；用於系統或單元之監視或測',a:'has_changes',vd:{'1995.01→2000.01':'移至F16H','2019.01→2020.01':'移至B60W','2023.01→2024.01':'移至H04B; 1筆內部調整'}},
+  {c:'G06',d:'一切計算均以機械方式實現的數位計算機',a:'has_changes',vd:{'1995.01→2000.01':'移至G07D; 4筆內部調整','2000.01':'G06J廢棄→G06N; G06G廢棄→G06N; G06D廢棄→G06F','2000.01→2006.01':'移至G11C; 2筆內部調整','2017.01→2018.01':'移至G16H; 2筆內部調整','2018.01→2019.01':'移至G16B、G16C; 1筆內部調整','2021.01→2022.01':'1筆內部調整','2022.01→2023.01':'1筆內部調整','2023.01→2024.01':'移至H04L; 1筆內部調整'}},
+  {c:'G07',d:'售票設備；車費計；用於一個或多個管制點收票價、通行費或入場',a:'has_changes',vd:{'1995.01→2000.01':'1筆內部調整'}},
+  {c:'G08',d:'SIGNALLING SYSTEMS, e.g. PERSONAL CALLIN',a:'unchanged',vd:{}},
+  {c:'G09',d:'教育或演示用具；用於教育或與盲人、聾人或啞人通信之用具；模',a:'has_changes',vd:{'1995.01→2000.01':'移至G02F'}},
+  {c:'G10',d:'風琴，簧風琴或具有相關吹氣機構之類似管樂器',a:'unchanged',vd:{}},
+  {c:'G11',d:'基於記錄載體與轉換器之間之相對運動而實現的資訊儲存',a:'has_changes',vd:{'1995.01→2000.01':'移至B82B、H03K、H04M'}},
+  {c:'G12',d:'CONSTRUCTIONAL DETAILS OF INSTRUMENTS, O',a:'has_changes',vd:{'2009.01→2010.01':'移至G01Q'}},
+  {c:'G16',d:'BIOINFORMATICS, i.e. INFORMATION AND COM',a:'unchanged',vd:{}},
+  {c:'G21',d:'FUSION REACTORS',a:'unchanged',vd:{}},
+  {c:'G99',d:'SUBJECT MATTER NOT OTHERWISE PROVIDED FO',a:'unchanged',vd:{}},
+  {c:'H01',d:'電纜；導體；絕緣體；材料之導電，絕緣或介電性能之選擇',a:'has_changes',vd:{'1995.01→2000.01':'移至B81B、B81C、G12B','2013.01→2014.01':'移至H02S; 1筆內部調整','2022.01→2023.01':'移至H10B、H10K、H10N; 1筆內部調整','2024.01→2025.01':'移至H10D、H10F、H10H; 1筆內部調整','2025.01→2026.01':'移至7個subclass'}},
+  {c:'H02',d:'電力供電或配電用之配電盤、變電站或開關裝置',a:'has_changes',vd:{'1995.01→2000.01':'移至B81B','2013.01→2014.01':'1筆內部調整'}},
+  {c:'H03',d:'使用工作於非開關狀態之主動元件電路，直接或經頻率變換產生',a:'has_changes',vd:{'1995.01→2000.01':'移至B81B、G06N、G11C'}},
+  {c:'H04',d:'傳輸',a:'has_changes',vd:{'1995.01→2000.01':'移至B81B、B81C、G01S; 1筆內部調整','2008.04→2009.01':'1筆內部調整','2010.01→2011.01':'1筆內部調整','2017.01→2018.01':'移至G02B'}},
+  {c:'H05',d:'電熱；其他類目不包括的電光源；電光源的一般電路配置',a:'unchanged',vd:{}},
+  {c:'H10',d:'電子儲存設備',a:'unchanged',vd:{}},
+  {c:'H99',d:'本部其他類目中不包括的技術主題',a:'unchanged',vd:{}}
+];
 
 // === Load ipc_data.json for 5-level classify ===
 let deprecatedSingle = {}, deprecatedMulti = {}, deprecatedAt = {}, exactLookup = {};
@@ -390,23 +393,27 @@ function toggleChangedOnly() {
   renderTable();
 }
 function renderTable() {
-  let data = CLASS_DATA;
+  let data = [...CLASS_DATA];
   if (_section !== 'all') data = data.filter(c => c.c.startsWith(_section));
   if (_changedOnly) data = data.filter(c => c.a === 'has_changes');
-  // Sort: changed first
   data.sort((a, b) => (a.a === 'has_changes' ? 0 : 1) - (b.a === 'has_changes' ? 0 : 1) || a.c.localeCompare(b.c));
   const ch = data.filter(c => c.a === 'has_changes').length;
   document.getElementById('table-count').textContent = `${data.length} 個 class（${ch} 有異動）`;
   document.getElementById('class-tbody').innerHTML = data.map(c => {
     const badge = c.a === 'has_changes' ? '<span class="badge badge-change">有異動</span>' : '<span class="badge badge-ok">無異動</span>';
-    const vers = c.v.map(v => `<span style="display:inline-block;background:#fff3e0;padding:1px 5px;border-radius:3px;font-size:0.7rem;margin:1px">${v}</span>`).join(' ');
-    const depNote = c.dp.length > 0 ? `<div style="font-size:0.7rem;color:#c62828;margin-top:2px">含廢棄: ${c.dp.join(', ')}</div>` : '';
+    const vd = c.vd || {};
+    const verEntries = Object.entries(vd);
+    let verCol = '—';
+    if (verEntries.length > 0) {
+      verCol = verEntries.map(([ver, detail]) =>
+        `<div style="margin-bottom:2px"><span style="display:inline-block;background:#fff3e0;padding:1px 5px;border-radius:3px;font-size:0.68rem;font-weight:600">${ver}</span> <span style="font-size:0.72rem;color:#555">${detail}</span></div>`
+      ).join('');
+    }
     return `<tr>
       <td><a href="./?ipc=${c.c}" style="font-weight:700;color:#2c3e50;text-decoration:none">${c.c}</a></td>
-      <td style="font-size:0.78rem;color:#555">${c.d}${depNote}</td>
+      <td style="font-size:0.78rem;color:#555">${c.d}</td>
       <td>${badge}</td>
-      <td style="font-size:0.75rem">${vers || '—'}</td>
-      <td style="text-align:center">${c.n || '—'}</td>
+      <td>${verCol}</td>
     </tr>`;
   }).join('');
 }
@@ -638,7 +645,7 @@ function runSimulation() {
     <span>🟢 不需處理</span><span>🔵 自動替換</span><span>🟠 需人工判斷</span><span>🔴 需確認範圍</span>
   </div>`;
 
-  simFilter('all');
+  renderSim();
 }
 
 const BADGE = {
@@ -649,14 +656,29 @@ const BADGE = {
 };
 
 let _simSection = 'all';
+let _simChangedOnly = false;
+
 function simFilter(sec) {
   _simSection = sec;
   ['all','A','B','C','D','E','F','G','H'].forEach(s => {
     const btn = document.getElementById('sf-' + s);
     if (btn) { if (s===sec) { btn.classList.add('active'); btn.style.background=btn.style.borderColor; } else { btn.classList.remove('active'); btn.style.background='#fff'; } }
   });
+  renderSim();
+}
+
+function toggleSimChanged() {
+  _simChangedOnly = !_simChangedOnly;
+  const btn = document.getElementById('sf-changed');
+  if (_simChangedOnly) { btn.classList.add('active'); btn.style.background = btn.style.borderColor; }
+  else { btn.classList.remove('active'); btn.style.background = '#fff'; }
+  renderSim();
+}
+
+function renderSim() {
   const all = window._simResults || [];
-  let filtered = sec==='all' ? [...all] : all.filter(r => r.cls.startsWith(sec));
+  let filtered = _simSection==='all' ? [...all] : all.filter(r => r.cls.startsWith(_simSection));
+  if (_simChangedOnly) filtered = filtered.filter(r => r.action !== 'unchanged');
   const order = {auto_replaced:0, review_deprecated:1, review_scope:2, unchanged:3};
   filtered.sort((a,b) => (order[a.action]??9) - (order[b.action]??9));
   const ch = filtered.filter(r => r.action!=='unchanged').length;
