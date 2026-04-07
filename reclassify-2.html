@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IPC 二階重分類分析</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { overflow-y: scroll; font-size: 16px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, 'PingFang TC', 'Microsoft JhengHei', sans-serif; background: #f8f9fa; color: #212529; line-height: 1.6; }
+a, input, button, textarea, select { font-family: inherit; font-size: inherit; }
+.container { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
+.subtitle { text-align: center; color: #6c757d; margin-bottom: 32px; font-size: 0.95rem; }
+.card { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.card h2 { font-size: 1.15rem; margin-bottom: 16px; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 8px; }
+.stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+.stat-box { text-align: center; padding: 16px 8px; border-radius: 10px; }
+.stat-box .num { font-size: 2rem; font-weight: 700; }
+.stat-box .label { font-size: 0.78rem; color: #666; margin-top: 4px; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
+.badge-ok { background: #e8f5e9; color: #2e7d32; }
+.badge-change { background: #fff3e0; color: #e65100; }
+.sample-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.sample-table th { background: #f8f9fa; padding: 8px; text-align: left; border-bottom: 2px solid #dee2e6; position: sticky; top: 0; z-index: 1; }
+.sample-table td { padding: 8px; border-bottom: 1px solid #eee; }
+.sample-table tr:hover { background: #f8f9fa; }
+.scroll-box { max-height: 500px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; }
+.try-input { display: flex; gap: 8px; margin-bottom: 12px; }
+.try-input input { flex: 1; padding: 10px 14px; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem; outline: none; }
+.try-input input:focus { border-color: #3498db; }
+.try-input button { padding: 10px 20px; background: #3498db; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 0.95rem; font-weight: 600; }
+.result-card { padding: 16px; border-radius: 8px; margin-top: 12px; font-size: 0.9rem; }
+.result-card.unchanged { background: #e8f5e9; border-left: 4px solid #4caf50; }
+.result-card.has_changes { background: #fff3e0; border-left: 4px solid #ff9800; }
+.ver-row { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; flex-wrap: wrap; }
+.ver-label { font-size: 0.72rem; font-weight: 700; font-family: 'SF Mono','Fira Code',monospace; color: #084298; background: #e7f1ff; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.ver-chip { font-family: 'SF Mono','Fira Code',monospace; font-size: 0.8rem; font-weight: 600; color: #0d6efd; cursor: pointer; }
+.ver-chip:hover { text-decoration: underline; }
+.ver-arrow { color: #adb5bd; font-size: 0.8rem; }
+.ver-name { font-size: 0.75rem; color: #6c757d; margin-left: 2px; }
+.ver-sep { color: #dee2e6; margin: 0 2px; }
+.ver-type { font-size: 0.68rem; font-weight: 600; padding: 1px 5px; border-radius: 3px; margin-right: 2px; }
+.ver-type-int { background: #e3f2fd; color: #1565c0; }
+.ver-type-cross { background: #fce4ec; color: #c62828; }
+.ver-type-dep { background: #f8d7da; color: #842029; }
+.filter-btn { padding: 4px 10px; border: 2px solid; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.8rem; font-weight: 600; transition: all 0.15s; }
+.filter-btn:hover { opacity: 0.8; }
+.filter-btn.active { color: #fff !important; }
+@media (max-width: 600px) { .stats-row { grid-template-columns: 1fr; } .scroll-box { overflow-x: auto; } .sample-table { min-width: 600px; } }
+@media (max-width: 480px) { nav > div { gap: 8px !important; padding: 0 10px !important; } nav span:first-child { font-size: 0.82rem !important; } nav a { font-size: 0.78rem !important; padding: 3px 7px !important; } }
+</style>
+</head>
+<body>
+<nav style="background:#fff;border-bottom:1px solid #e0e0e0;padding:10px 0;position:sticky;top:0;z-index:100">
+  <div style="max-width:960px;margin:0 auto;padding:0 16px;display:flex;align-items:center;gap:16px">
+    <span style="font-weight:700;color:#2c3e50;font-size:0.95rem">IPC 工具</span>
+    <a href="./" style="text-decoration:none;color:#666;font-size:0.85rem;font-weight:600;padding:4px 10px;border-radius:4px">歷史查詢</a>
+    <a href="./reclassify.html" style="text-decoration:none;color:#666;font-size:0.85rem;font-weight:600;padding:4px 10px;border-radius:4px">批次重分類</a>
+    <a href="./reclassify-2.html" style="text-decoration:none;color:#fff;font-size:0.85rem;font-weight:600;padding:4px 10px;border-radius:4px;background:#3498db">重分類二階</a>
+    <a href="./reclassify-class.html" style="text-decoration:none;color:#666;font-size:0.85rem;font-weight:600;padding:4px 10px;border-radius:4px">重分類三階</a>
+    <a href="https://github.com/ronjuan83/ipc-conversion" target="_blank" rel="noreferrer" style="text-decoration:none;color:#999;font-size:0.8rem;margin-left:auto">GitHub</a>
+  </div>
+</nav>
+<div class="container">
+  <h1>IPC 二階重分類分析</h1>
+  <p class="subtitle">判斷 IPC Class（三碼，如 H01、B23、G06）是否有版本異動及涉及版本</p>
+
+  <div class="card">
+    <h2>總覽</h2>
+    <div class="stats-row">
+      <div class="stat-box" style="background:#e8eaf6"><div class="num" id="n-total">-</div><div class="label">IPC Class 總數</div></div>
+      <div class="stat-box" style="background:#fff3e0"><div class="num" id="n-changed" style="color:#e65100">-</div><div class="label">有異動</div></div>
+      <div class="stat-box" style="background:#e8f5e9"><div class="num" id="n-unchanged" style="color:#2e7d32">-</div><div class="label">無異動</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>即時查詢 — 輸入 IPC Class</h2>
+    <div class="try-input">
+      <input type="text" id="cls-input" placeholder="輸入 IPC class（三碼），如 H01、B23、G06" maxlength="3" />
+      <button onclick="tryQuery()">查詢</button>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+      <button onclick="tryEx('H01')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">H01</button>
+      <button onclick="tryEx('G06')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">G06</button>
+      <button onclick="tryEx('B01')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">B01</button>
+      <button onclick="tryEx('F24')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">F24</button>
+      <button onclick="tryEx('C13')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">C13</button>
+      <button onclick="tryEx('A22')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">A22</button>
+      <button onclick="tryEx('B60')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">B60</button>
+      <button onclick="tryEx('D01')" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;background:#f8f9fa;cursor:pointer;font-size:0.8rem">D01</button>
+    </div>
+    <div id="query-result"></div>
+  </div>
+
+  <!-- CSV Upload -->
+  <div class="card">
+    <h2>上傳檔案分析</h2>
+    <p style="font-size:0.85rem;color:#555;margin-bottom:12px">上傳 CSV，系統將判斷每筆專利的 IPC class（三碼）是否有異動。</p>
+    <div id="upload-area" style="border:2px dashed #ccc;border-radius:10px;padding:24px;text-align:center;cursor:pointer"
+         ondragover="event.preventDefault();this.style.borderColor='#3498db'"
+         ondragleave="this.style.borderColor='#ccc'"
+         ondrop="event.preventDefault();this.style.borderColor='#ccc';handleUpload(event.dataTransfer.files[0])"
+         onclick="document.getElementById('file-input').click()">
+      <div style="font-size:1.2rem;margin-bottom:4px">拖入 CSV 或點擊選取</div>
+      <input type="file" id="file-input" accept=".csv,.tsv,.txt" style="display:none" onchange="handleUpload(this.files[0])">
+    </div>
+    <div id="upload-status" style="display:none;margin-top:8px"></div>
+    <div id="upload-result" style="display:none;margin-top:8px"></div>
+  </div>
+
+  <div class="card">
+    <h2>全部 Class 一覽</h2>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+      <button onclick="filterAll('all')" class="filter-btn active" style="border-color:#3498db;color:#3498db" id="fb-all">全部</button>
+      <button onclick="filterAll('A')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="fb-A">A</button>
+      <button onclick="filterAll('B')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="fb-B">B</button>
+      <button onclick="filterAll('C')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="fb-C">C</button>
+      <button onclick="filterAll('D')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="fb-D">D</button>
+      <button onclick="filterAll('E')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="fb-E">E</button>
+      <button onclick="filterAll('F')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="fb-F">F</button>
+      <button onclick="filterAll('G')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="fb-G">G</button>
+      <button onclick="filterAll('H')" class="filter-btn" style="border-color:#3498db;color:#3498db" id="fb-H">H</button>
+      <span style="color:#ccc">|</span>
+      <button onclick="toggleChangedOnly()" class="filter-btn" style="border-color:#e91e63;color:#e91e63" id="fb-changed">僅異動</button>
+      <span id="table-count" style="font-size:0.78rem;color:#888;margin-left:8px"></span>
+    </div>
+    <div class="scroll-box">
+      <table class="sample-table">
+        <thead><tr><th>Class</th><th>說明</th><th>狀態</th><th>版本異動細節</th></tr></thead>
+        <tbody id="class-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <p style="text-align:center;color:#999;font-size:0.78rem;margin-top:20px">
+    資料來源：WIPO IPC Concordance（IPC v6 → 2026.01）｜ 更新日期：2026-04-06
+  </p>
+</div>
+
+<script>
+const CLASS_DATA = [
+{"c": "A01", "d": "農業或林業之整地；一般農業機械或農具之部件、零件或附件", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "int", "s": "A01B", "sn": "農業或林業之整地；一般農業機械或農具之部件、零件或"}, {"t": "int", "s": "A01D", "sn": "收獲；割草"}, {"t": "int", "s": "A01G", "sn": "園藝；蔬菜、花卉、稻、果樹、葡萄、啤酒花或海菜之栽"}], "2000.01→2006.01": [{"t": "int", "s": "A01N", "sn": "人體、動植物體或其局部之保存；殺生劑，例如作為消毒"}], "2017.01→2018.01": [{"t": "int", "s": "A01B", "sn": "農業或林業之整地；一般農業機械或農具之部件、零件或"}, {"t": "int", "s": "A01D", "sn": "收獲；割草"}]}},
+{"c": "A21", "d": "食品烤爐；焙烤用機械或設備", "a": "has_changes", "vd": {"2024.01→2025.01": [{"t": "cross", "f": "A21D", "fn": "焙烤用麵粉或麵糰之處理（如保存） ，如添加材料；焙", "to": "A23B", "tn": "保存，如用罐頭貯存肉、魚、蛋、水果、蔬菜、食用種籽"}, {"t": "int", "s": "A21D", "sn": "焙烤用麵粉或麵糰之處理（如保存） ，如添加材料；焙"}]}},
+  {c:'A22',d:'屠宰',a:'unchanged',vd:{}},
+{"c": "A23", "d": "保存，如用罐頭貯存肉、魚、蛋、水果、蔬菜、食用種籽；水果", "a": "has_changes", "vd": {"2000.01→2006.01": [{"t": "cross", "f": "A23L", "fn": "未包括於次類A21D或A23B至A23J內之食品、", "to": "A21D", "tn": "焙烤用麵粉或麵糰之處理（如保存） ，如添加材料；焙"}], "2020.01→2021.01": [{"t": "int", "s": "A23C", "sn": "乳製品，如奶、黃油、乾酪；奶或乾酪之代用品；其製備"}], "2024.01→2025.01": [{"t": "int", "s": "A23L", "sn": "未包括於次類A21D或A23B至A23J內之食品、"}, {"t": "int", "s": "A23C", "sn": "乳製品，如奶、黃油、乾酪；奶或乾酪之代用品；其製備"}, {"t": "int", "s": "A23D", "sn": "食用油或脂肪，例如人造奶油、鬆酥油脂、烹飪用油"}, {"t": "int", "s": "A23F", "sn": "咖啡；茶；其代用品；此等之製造、配製或泡製"}, {"t": "int", "s": "A23G", "sn": "可可；可可製品，如巧克力；可可或可可製品的代用品；"}]}},
+{"c": "A24", "d": "吸煙或嚼煙之製造或製備；煙草；鼻煙", "a": "has_changes", "vd": {"2019.01→2020.01": [{"t": "int", "s": "A24D", "sn": "雪茄；紙煙；煙油濾芯；雪茄煙或紙煙之煙嘴；煙油濾芯"}]}},
+{"c": "A41", "d": "襯衣；內衣；嬰兒內衣；手帕", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "int", "s": "A41D", "sn": "外衣；防護服；衣飾配件"}, {"t": "cross", "f": "A41D", "fn": "外衣；防護服；衣飾配件", "to": "A63B", "tn": "體育鍛練、體操、游泳、爬山或擊劍用之器械；球類；訓"}]}},
+  {c:'A42',d:'帽子；頭部覆蓋物',a:'unchanged',vd:{}},
+{"c": "A43", "d": "鞋類的特徵；鞋類的部件", "a": "has_changes", "vd": {"2021.01→2022.01": [{"t": "cross", "f": "A43B", "fn": "鞋類的特徵；鞋類的部件", "to": "A63H", "tn": "玩具，如:陀螺、玩偶、滾鐵環或積木"}, {"t": "int", "s": "A43B", "sn": "鞋類的特徵；鞋類的部件"}, {"t": "cross", "f": "A43B", "fn": "鞋類的特徵；鞋類的部件", "to": "A61F", "tn": "可植入血管內的濾器；假肢體；為人體管狀結構提供開口"}]}},
+  {c:'A44',d:'鈕扣，別針，帶扣，拉鏈或類似物',a:'unchanged',vd:{}},
+  {c:'A45',d:'手杖；傘；女用扇或類似物',a:'unchanged',vd:{}},
+  {c:'A46',d:'刷類',a:'unchanged',vd:{}},
+{"c": "A47", "d": "桌子；寫字台；辦公傢俱；櫃櫥；抽屜；傢俱之一般零件", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "A47G", "fn": "家庭用具及餐桌用具", "to": "F21S", "tn": "非便攜式照明裝置；其系統；特別適於車輛外部之車輛照"}], "2000.01→2006.01": [{"t": "int", "s": "A47B", "sn": "桌子；寫字台；辦公傢俱；櫃櫥；抽屜；傢俱之一般零件"}, {"t": "cross", "f": "A47B", "fn": "桌子；寫字台；辦公傢俱；櫃櫥；抽屜；傢俱之一般零件", "to": "G06F", "tn": "電子數位資料處理"}], "2018.01→2019.01": [{"t": "int", "s": "A47J", "sn": "廚房用具；咖啡磨；香料磨；飲料製備裝置"}]}},
+{"c": "A61", "d": "診斷；外科；鑑定", "a": "has_changes", "vd": {"2000.01→2006.01": [{"t": "int", "s": "A61B", "sn": "診斷；外科；鑑定"}, {"t": "int", "s": "A61K", "sn": "醫用、牙科用或梳妝用之配製品"}, {"t": "int", "s": "A61L", "sn": "材料或物體消毒之一般方法或裝置；空氣之滅菌、消毒或"}, {"t": "int", "s": "A61N", "sn": "電療；磁療；放射療；超音波療"}], "2012.01→2013.01": [{"t": "int", "s": "A61G", "sn": "專門適用於病人或殘障人士的運輸工具、專用運輸工具或"}, {"t": "int", "s": "A61M", "sn": "將介質輸入人體內或輸到人體上之器械；為轉移人體介質"}], "2013.01→2014.01": [{"t": "int", "s": "A61M", "sn": "將介質輸入人體內或輸到人體上之器械；為轉移人體介質"}]}},
+  {c:'A62',d:'救生設備；救生裝置或救生方法',a:'unchanged',vd:{}},
+{"c": "A63", "d": "體育鍛練、體操、游泳、爬山或擊劍用之器械；球類；訓練設備", "a": "has_changes", "vd": {"2018.01→2019.01": [{"t": "int", "s": "A63H", "sn": "玩具，如:陀螺、玩偶、滾鐵環或積木"}], "2019.01→2020.01": [{"t": "cross", "f": "A63H", "fn": "玩具，如:陀螺、玩偶、滾鐵環或積木", "to": "B63H", "tn": "MARINE PROPULSION OR STEE"}, {"t": "cross", "f": "A63C", "fn": "冰鞋；滑雪橇；滾輪溜冰鞋；球場、冰場或類似場地的設", "to": "B63H", "tn": "MARINE PROPULSION OR STEE"}]}},
+  {c:'A99',d:'本部其他類目中不包括的技術主題',a:'unchanged',vd:{}},
+{"c": "B01", "d": "沸騰；沸騰裝置", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "B01D", "fn": "分離", "to": "B81B", "tn": "微結構裝置或系統"}, {"t": "cross", "f": "B01D", "fn": "分離", "to": "B81C", "tn": "微結構裝置或系統之製造或處理的方法或設備"}, {"t": "cross", "f": "B01J", "fn": "化學或物理方法，例如：催化作用，膠體化學；其有關設", "to": "B82B", "tn": "NANOSTRUCTURES FORMED BY "}], "2000.01→2006.01": [{"t": "int", "s": "B01D", "sn": "分離"}, {"t": "cross", "f": "B01D", "fn": "分離", "to": "G01N", "tn": "借助於測定材料之化學或物理性質用以測試或分析材料"}, {"t": "cross", "f": "B01J", "fn": "化學或物理方法，例如：催化作用，膠體化學；其有關設", "to": "C40B", "tn": "組合化學；化合物庫，如化學庫"}, {"t": "int", "s": "B01J", "sn": "化學或物理方法，例如：催化作用，膠體化學；其有關設"}], "2021.01→2022.01": [{"t": "cross", "f": "B01F", "fn": "混合，例如：溶解、乳化、分散", "to": "C09K", "tn": "其他類目不包括的各種應用材料；其他類目不包括的材料"}]}},
+{"c": "B02", "d": "碾磨穀物之準備；利用加工表殼將穀粒精製成商品", "a": "has_changes", "vd": {"2000.01→2006.01": [{"t": "int", "s": "B02C", "sn": "一般破碎，研磨或粉碎，碾磨穀物"}, {"t": "cross", "f": "B02C", "fn": "一般破碎，研磨或粉碎，碾磨穀物", "to": "B29B", "tn": "成型材料之準備或預處理；製作顆粒或預成型件；塑膠或"}]}},
+  {c:'B03',d:'用液體或用風力搖床或風力跳汰機分離固體物料',a:'unchanged',vd:{}},
+  {c:'B04',d:'離心機',a:'unchanged',vd:{}},
+{"c": "B05", "d": "噴射裝置；霧化裝置；噴嘴", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "B05B", "fn": "噴射裝置；霧化裝置；噴嘴", "to": "B81B", "tn": "微結構裝置或系統"}]}},
+  {c:'B06',d:'一般機械振動之發生或傳遞',a:'unchanged',vd:{}},  {c:'B07',d:'用細篩、粗篩、篩分或用氣流將固體由固體中分離',a:'unchanged',vd:{}},  {c:'B08',d:'一般清潔；一般污垢之防除',a:'unchanged',vd:{}},
+{"c": "B09", "d": "固體廢物之處理", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "B09B", "fn": "固體廢物之處理", "to": "B62D", "tn": "MOTOR VEHICLES"}]}},
+  {c:'B21',d:'金屬之軋製',a:'unchanged',vd:{}},  {c:'B22',d:'鑄造造模',a:'unchanged',vd:{}},
+{"c": "B23", "d": "車削；搪削", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "B23K", "fn": "軟焊或焊開；焊接", "to": "B81C", "tn": "微結構裝置或系統之製造或處理的方法或設備"}, {"t": "int", "s": "B23K", "sn": "軟焊或焊開；焊接"}, {"t": "cross", "f": "B23P", "fn": "METAL-WORKING NOT OTHERWISE PROVIDED FOR", "to": "B81C", "tn": "微結構裝置或系統之製造或處理的方法或設備"}, {"t": "cross", "f": "B23Q", "fn": "機床之零件、部件、或附件", "to": "B81C", "tn": "微結構裝置或系統之製造或處理的方法或設備"}]}},
+  {c:'B24',d:'磨削或拋光',a:'unchanged',vd:{}},  {c:'B25',d:'手工具',a:'unchanged',vd:{}},  {c:'B26',d:'手持切割工具',a:'unchanged',vd:{}},  {c:'B27',d:'木材加工',a:'unchanged',vd:{}},  {c:'B28',d:'黏土或陶瓷成型',a:'unchanged',vd:{}},
+{"c": "B29", "d": "塑膠加工", "a": "has_changes", "vd": {"2000.01→2006.01": [{"t": "cross", "f": "B29D", "fn": "用塑膠生產特殊製品", "to": "B32B", "tn": "層狀產品"}]}},
+  {c:'B30',d:'壓力機',a:'unchanged',vd:{}},
+{"c": "B31", "d": "紙製品製造", "a": "has_changes", "vd": {"2016.01→2017.01": [{"t": "int", "s": "B31D", "sn": "製作其他紙或紙板製品"}]}},
+  {c:'B32',d:'層狀產品',a:'unchanged',vd:{}},  {c:'B33',d:'積層製造',a:'unchanged',vd:{}},
+{"c": "B41", "d": "印刷", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "B41J", "fn": "打字機；選擇性印刷", "to": "B81C", "tn": "微結構裝置或系統之製造或處理的方法或設備"}]}},
+  {c:'B42',d:'裝訂',a:'unchanged',vd:{}},  {c:'B43',d:'書寫或繪圖器具',a:'unchanged',vd:{}},
+{"c": "B44", "d": "裝飾藝術", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "B44C", "fn": "產生裝飾效果之工藝", "to": "B81C", "tn": "微結構裝置或系統之製造或處理的方法或設備"}], "2013.01→2014.01": [{"t": "cross", "f": "B44F", "fn": "特種圖樣或圖畫", "to": "B42D", "tn": "書；書籍封皮；身分識別或防偽特徵之印刷品"}]}},
+{"c": "B60", "d": "車輛總論", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "B60Q", "fn": "車輛信號裝置", "to": "F21S", "tn": "非便攜式照明裝置"}], "2000.01→2006.01": [{"t": "int", "s": "B60K", "sn": "車輛動力裝置"}], "2018.01→2019.01": [{"t": "int", "s": "B60K", "sn": "車輛動力裝置"}, {"t": "int", "s": "B60S", "sn": "車輛維護"}], "2019.01→2020.01": [{"t": "cross", "f": "B60K", "fn": "車輛動力裝置", "to": "B63H", "tn": "MARINE PROPULSION OR STEERING"}]}},
+  {c:'B61',d:'鐵路',a:'unchanged',vd:{}},  {c:'B62',d:'無軌陸用車輛',a:'unchanged',vd:{}},  {c:'B63',d:'船舶',a:'unchanged',vd:{}},
+{"c": "B64", "d": "航空器", "a": "has_changes", "vd": {"2019.01→2020.01": [{"t": "cross", "f": "B64C", "fn": "飛機", "to": "B63H", "tn": "MARINE PROPULSION"}], "2022.01→2023.01": [{"t": "int", "s": "B64C", "sn": "飛機"}]}},
+{"c": "B65", "d": "輸送；包裝；貯存", "a": "has_changes", "vd": {"2000.01→2006.01": [{"t": "cross", "f": "B65D", "fn": "容器", "to": "A47G", "tn": "家庭用具及餐桌用具"}, {"t": "cross", "f": "B65G", "fn": "輸送裝置", "to": "H01L", "tn": "半導體裝置"}]}},
+  {c:'B66',d:'升降機',a:'unchanged',vd:{}},  {c:'B67',d:'瓶蓋',a:'unchanged',vd:{}},  {c:'B68',d:'馬具',a:'unchanged',vd:{}},  {c:'B81',d:'微結構裝置或系統',a:'unchanged',vd:{}},  {c:'B82',d:'奈米結構',a:'unchanged',vd:{}},  {c:'B99',d:'B部其他',a:'unchanged',vd:{}},
+{"c": "C01", "d": "無機化學", "a": "has_changes", "vd": {"2016.01→2017.01": [{"t": "cross", "f": "C01B", "fn": "非金屬元素；其化合物", "to": "B01J", "tn": "化學或物理方法；催化作用"}]}},
+  {c:'C02',d:'水處理',a:'unchanged',vd:{}},  {c:'C03',d:'玻璃',a:'unchanged',vd:{}},
+{"c": "C04", "d": "水泥", "a": "has_changes", "vd": {"2000.01→2006.01": [{"t": "cross", "f": "C04B", "fn": "水泥；其組合物", "to": "C09K", "tn": "應用材料"}]}},
+{"c": "C05", "d": "肥料", "a": "has_changes", "vd": {"2017.01→2018.01": [{"t": "cross", "f": "C05F", "fn": "有機肥料", "to": "A01G", "tn": "園藝"}]}},
+  {c:'C06',d:'炸藥',a:'unchanged',vd:{}},
+{"c": "C07", "d": "有機化學", "a": "has_changes", "vd": {"2010.01→2011.01": [{"t": "int", "s": "C07G", "sn": "未知組成之化合物"}]}},
+  {c:'C08',d:'高分子化合物',a:'unchanged',vd:{}},
+{"c": "C09", "d": "染料", "a": "has_changes", "vd": {"2000.01→2006.01": [{"t": "cross", "f": "C09K", "fn": "應用材料", "to": "C04B", "tn": "水泥"}, {"t": "cross", "f": "C09J", "fn": "黏合劑", "to": "A61K", "tn": "醫用配製品"}]}},
+  {c:'C10',d:'石油、煤氣或焦炭',a:'unchanged',vd:{}},  {c:'C11',d:'油脂',a:'unchanged',vd:{}},
+{"c": "C12", "d": "生物化學", "a": "has_changes", "vd": {"2018.01→2019.01": [{"t": "int", "s": "C12C", "sn": "啤酒"}, {"t": "int", "s": "C12G", "sn": "葡萄酒"}]}},
+{"c": "C13", "d": "製糖", "a": "has_changes", "vd": {"2010.01→2011.01": [{"t": "int", "s": "C13C", "sn": "蔗糖之加工"}, {"t": "int", "s": "C13D", "sn": "自含糖溶液分離糖"}, {"t": "int", "s": "C13F", "sn": "糖之其他加工"}, {"t": "int", "s": "C13G", "sn": "蒸發設備"}, {"t": "int", "s": "C13H", "sn": "著色及脫色"}, {"t": "int", "s": "C13J", "sn": "醣蜜之加工"}], "2011.01": [{"t": "dep", "s": "C13C", "sn": "蔗糖之加工", "ds": [{"c": "C13B", "n": "蔗糖之生產"}]}, {"t": "dep", "s": "C13D", "sn": "自含糖溶液分離糖", "ds": [{"c": "C13B", "n": "蔗糖之生產"}]}, {"t": "dep", "s": "C13F", "sn": "糖之其他加工", "ds": [{"c": "C13B", "n": "蔗糖之生產"}]}, {"t": "dep", "s": "C13G", "sn": "蒸發設備", "ds": [{"c": "C13B", "n": "蔗糖之生產"}]}, {"t": "dep", "s": "C13H", "sn": "著色及脫色", "ds": [{"c": "C13B", "n": "蔗糖之生產"}]}, {"t": "dep", "s": "C13J", "sn": "醣蜜之加工", "ds": [{"c": "C13B", "n": "蔗糖之生產"}]}]}},
+  {c:'C14',d:'皮革',a:'unchanged',vd:{}},  {c:'C21',d:'鐵冶金',a:'unchanged',vd:{}},  {c:'C22',d:'金屬冶金',a:'unchanged',vd:{}},
+{"c": "C23", "d": "鍍覆", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "C23C", "fn": "金屬鍍覆", "to": "B81C", "tn": "微結構裝置或系統之製造"}, {"t": "cross", "f": "C23F", "fn": "去除金屬材料", "to": "B81C", "tn": "微結構裝置或系統之製造"}]}},
+{"c": "C25", "d": "電解", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "C25D", "fn": "電鍍", "to": "B81C", "tn": "微結構裝置或系統之製造"}]}},
+  {c:'C30',d:'晶體生長',a:'unchanged',vd:{}},
+{"c": "C40", "d": "組合化學", "a": "has_changes", "vd": {"2000.01→2006.01": [{"t": "cross", "f": "C40B", "fn": "組合化學", "to": "B01J", "tn": "催化作用"}], "2018.01→2019.01": [{"t": "cross", "f": "C40B", "fn": "組合化學", "to": "G16B", "tn": "生物資訊學"}]}},
+  {c:'C99',d:'C部其他',a:'unchanged',vd:{}},
+  {c:'D01',d:'紡紗',a:'unchanged',vd:{}},  {c:'D02',d:'紗線',a:'unchanged',vd:{}},  {c:'D03',d:'織造',a:'unchanged',vd:{}},  {c:'D04',d:'針織',a:'unchanged',vd:{}},  {c:'D05',d:'縫紉',a:'unchanged',vd:{}},  {c:'D06',d:'紡織處理',a:'unchanged',vd:{}},  {c:'D07',d:'繩纜',a:'unchanged',vd:{}},  {c:'D21',d:'造紙',a:'unchanged',vd:{}},  {c:'D99',d:'D部其他',a:'unchanged',vd:{}},
+{"c": "E01", "d": "道路鐵路", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "E01H", "fn": "街道清潔", "to": "A01D", "tn": "收獲；割草"}]}},
+  {c:'E02',d:'水利工程',a:'unchanged',vd:{}},  {c:'E03',d:'給水排水',a:'unchanged',vd:{}},
+{"c": "E04", "d": "建築構造", "a": "has_changes", "vd": {"2000.01→2006.01": [{"t": "cross", "f": "E04G", "fn": "施工架", "to": "E01D", "tn": "橋樑"}], "2013.01→2014.01": [{"t": "int", "s": "E04D", "sn": "屋頂覆蓋層"}], "2017.01→2018.01": [{"t": "int", "s": "E04D", "sn": "屋頂覆蓋層"}]}},
+{"c": "E05", "d": "鎖", "a": "has_changes", "vd": {"2016.01→2017.01": [{"t": "cross", "f": "E05F", "fn": "門窗五金", "to": "A47B", "tn": "傢俱"}]}},
+  {c:'E06',d:'門窗',a:'unchanged',vd:{}},
+{"c": "E21", "d": "鑽探採礦", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "int", "s": "E21C", "sn": "採礦"}], "2000.01→2006.01": [{"t": "cross", "f": "E21B", "fn": "鑽探", "to": "C09K", "tn": "應用材料"}, {"t": "cross", "f": "E21D", "fn": "隧道", "to": "C09K", "tn": "應用材料"}]}},
+  {c:'E99',d:'E部其他',a:'unchanged',vd:{}},
+  {c:'F01',d:'機器或發動機',a:'unchanged',vd:{}},
+{"c": "F02", "d": "內燃機", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "F02B", "fn": "內燃機", "to": "F01N", "tn": "排氣裝置"}]}},
+  {c:'F03',d:'液力機械',a:'unchanged',vd:{}},  {c:'F04',d:'泵',a:'unchanged',vd:{}},  {c:'F15',d:'流體工作系統',a:'unchanged',vd:{}},  {c:'F16',d:'機械元件',a:'unchanged',vd:{}},  {c:'F17',d:'貯氣',a:'unchanged',vd:{}},
+{"c": "F21", "d": "照明", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "int", "s": "F21S", "sn": "非便攜式照明裝置"}, {"t": "int", "s": "F21V", "sn": "照明裝置零部件"}, {"t": "int", "s": "F21H", "sn": "非電的照明"}, {"t": "cross", "f": "F21K", "fn": "螢光光源", "to": "H01J", "tn": "電子管"}], "2015.01→2016.01": [{"t": "int", "s": "F21S", "sn": "非便攜式照明裝置"}]}},
+  {c:'F22',d:'蒸汽鍋爐',a:'unchanged',vd:{}},
+{"c": "F23", "d": "燃燒", "a": "has_changes", "vd": {"2000.01→2006.01": [{"t": "int", "s": "F23D", "sn": "燃燒器"}, {"t": "int", "s": "F23G", "sn": "焚化爐"}]}},
+{"c": "F24", "d": "供暖", "a": "has_changes", "vd": {"2013.01→2014.01": [{"t": "int", "s": "F24J", "sn": "其他產熱方法"}], "2017.01→2018.01": [{"t": "int", "s": "F24J", "sn": "其他產熱方法"}], "2018.01": [{"t": "dep", "s": "F24J", "sn": "其他產熱方法", "ds": [{"c": "F24S", "n": "太陽能集熱器"}, {"c": "F24T", "n": "地熱收集器"}, {"c": "F24V", "n": "其他熱收集"}]}]}},
+  {c:'F25',d:'冷凍',a:'unchanged',vd:{}},  {c:'F26',d:'乾燥',a:'unchanged',vd:{}},  {c:'F27',d:'爐窯',a:'unchanged',vd:{}},  {c:'F28',d:'熱交換',a:'unchanged',vd:{}},  {c:'F41',d:'武器',a:'unchanged',vd:{}},  {c:'F42',d:'彈藥',a:'unchanged',vd:{}},  {c:'F99',d:'F部其他',a:'unchanged',vd:{}},
+{"c": "G01", "d": "測量測試", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "G01B", "fn": "長度測量", "to": "B82B", "tn": "奈米結構"}, {"t": "int", "s": "G01N", "sn": "材料測試"}, {"t": "cross", "f": "G01N", "fn": "材料測試", "to": "B82B", "tn": "奈米結構"}], "2000.01→2006.01": [{"t": "cross", "f": "G01N", "fn": "材料測試", "to": "B01J", "tn": "催化作用"}, {"t": "int", "s": "G01S", "sn": "無線電導航"}, {"t": "int", "s": "G01C", "sn": "測距導航"}]}},
+{"c": "G02", "d": "光學", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "G02B", "fn": "光學元件", "to": "B81B", "tn": "微結構裝置"}], "2020.01→2021.01": [{"t": "int", "s": "G02B", "sn": "光學元件"}]}},
+{"c": "G03", "d": "攝影", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "G03F", "fn": "照相製版", "to": "B81C", "tn": "微結構裝置之製造"}]}},
+{"c": "G04", "d": "鐘錶", "a": "has_changes", "vd": {"2012.01→2013.01": [{"t": "int", "s": "G04C", "sn": "電動鐘錶"}, {"t": "int", "s": "G04G", "sn": "電子計時"}]}},
+{"c": "G05", "d": "控制調節", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "G05G", "fn": "機械控制裝置", "to": "F16H", "tn": "傳動裝置"}], "2019.01→2020.01": [{"t": "cross", "f": "G05D", "fn": "控制系統", "to": "B60W", "tn": "車輛控制"}], "2023.01→2024.01": [{"t": "int", "s": "G05D", "sn": "控制系統"}, {"t": "cross", "f": "G05D", "fn": "控制系統", "to": "H04B", "tn": "傳輸"}]}},
+{"c": "G06", "d": "計算", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "int", "s": "G06F", "sn": "電子數位資料處理"}, {"t": "cross", "f": "G06K", "fn": "圖形數據讀取", "to": "G07D", "tn": "錢幣處理"}], "2000.01→2006.01": [{"t": "cross", "f": "G06F", "fn": "電子數位資料處理", "to": "G11C", "tn": "靜態儲存"}, {"t": "int", "s": "G06F", "sn": "電子數位資料處理"}, {"t": "int", "s": "G06K", "sn": "圖形數據讀取"}], "2017.01→2018.01": [{"t": "int", "s": "G06F", "sn": "電子數位資料處理"}, {"t": "cross", "f": "G06Q", "fn": "行政商業管理", "to": "G16H", "tn": "醫療資訊"}]}},
+{"c": "G07", "d": "售票計費", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "int", "s": "G07F", "sn": "投幣式設備"}]}},
+  {c:'G08',d:'信號系統',a:'unchanged',vd:{}},
+{"c": "G09", "d": "教育演示", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "G09G", "fn": "顯示控制", "to": "G02F", "tn": "光學控制"}]}},
+  {c:'G10',d:'樂器聲學',a:'unchanged',vd:{}},
+{"c": "G11", "d": "資訊儲存", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "G11B", "fn": "資訊儲存", "to": "B82B", "tn": "奈米結構"}, {"t": "cross", "f": "G11B", "fn": "資訊儲存", "to": "H04M", "tn": "電話通信"}, {"t": "cross", "f": "G11C", "fn": "靜態儲存", "to": "H03K", "tn": "脈衝技術"}]}},
+{"c": "G12", "d": "儀器構造", "a": "has_changes", "vd": {"2009.01→2010.01": [{"t": "cross", "f": "G12B", "fn": "儀器構造細節", "to": "G01Q", "tn": "掃描探針技術"}]}},
+  {c:'G16',d:'生物資訊',a:'unchanged',vd:{}},  {c:'G21',d:'核子技術',a:'unchanged',vd:{}},  {c:'G99',d:'G部其他',a:'unchanged',vd:{}},
+{"c": "H01", "d": "基本電氣元件", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "H01L", "fn": "半導體裝置", "to": "B81C", "tn": "微結構裝置之製造"}, {"t": "cross", "f": "H01L", "fn": "半導體裝置", "to": "B81B", "tn": "微結構裝置"}], "2013.01→2014.01": [{"t": "cross", "f": "H01L", "fn": "半導體裝置", "to": "H02S", "tn": "光伏發電"}, {"t": "int", "s": "H01L", "sn": "半導體裝置"}], "2022.01→2023.01": [{"t": "cross", "f": "H01L", "fn": "半導體裝置", "to": "H10B", "tn": "電子儲存設備"}, {"t": "cross", "f": "H01L", "fn": "半導體裝置", "to": "H10K", "tn": "有機固態電子裝置"}], "2024.01→2025.01": [{"t": "cross", "f": "H01L", "fn": "半導體裝置", "to": "H10D", "tn": "無機電子半導體裝置"}, {"t": "cross", "f": "H01L", "fn": "半導體裝置", "to": "H10F", "tn": "光敏半導體裝置"}], "2025.01→2026.01": [{"t": "cross", "f": "H01L", "fn": "半導體裝置", "to": "H10P", "tn": "通用製程"}, {"t": "cross", "f": "H01L", "fn": "半導體裝置", "to": "H10W", "tn": "封裝互連"}]}},
+{"c": "H02", "d": "電力", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "H02K", "fn": "電機", "to": "B81B", "tn": "微結構裝置"}, {"t": "cross", "f": "H02N", "fn": "其他電機", "to": "B81B", "tn": "微結構裝置"}], "2013.01→2014.01": [{"t": "int", "s": "H02N", "sn": "其他電機"}]}},
+{"c": "H03", "d": "電子電路", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "cross", "f": "H03F", "fn": "放大器", "to": "G11C", "tn": "靜態儲存"}, {"t": "cross", "f": "H03H", "fn": "阻抗網路", "to": "B81B", "tn": "微結構裝置"}, {"t": "cross", "f": "H03K", "fn": "脈衝技術", "to": "G11C", "tn": "靜態儲存"}]}},
+{"c": "H04", "d": "通信技術", "a": "has_changes", "vd": {"1995.01→2000.01": [{"t": "int", "s": "H04M", "sn": "電話通信"}, {"t": "cross", "f": "H04N", "fn": "影像通信", "to": "G01S", "tn": "無線電導航"}, {"t": "cross", "f": "H04R", "fn": "聲學換能器", "to": "B81C", "tn": "微結構裝置之製造"}], "2017.01→2018.01": [{"t": "cross", "f": "H04N", "fn": "影像通信", "to": "G02B", "tn": "光學元件"}]}},
+  {c:'H05',d:'其他電氣技術',a:'unchanged',vd:{}},  {c:'H10',d:'半導體儲存',a:'unchanged',vd:{}},  {c:'H99',d:'H部其他',a:'unchanged',vd:{}}
+];
+
+// Stats
+function updateStats() {
+  const t = CLASS_DATA.length;
+  const ch = CLASS_DATA.filter(c => c.a === 'has_changes').length;
+  document.getElementById('n-total').textContent = t;
+  document.getElementById('n-changed').textContent = ch;
+  document.getElementById('n-unchanged').textContent = t - ch;
+}
+updateStats();
+
+// Render version detail for table rows
+function renderVerDetail(vd) {
+  const entries = Object.entries(vd || {});
+  if (entries.length === 0) return '<span style="color:#aaa">—</span>';
+  return entries.map(([ver, items]) => {
+    if (!Array.isArray(items)) return '';
+    const id = 'vd_' + Math.random().toString(36).slice(2, 8);
+    const detail = items.map(item => {
+      if (item.t === 'dep') {
+        const dests = (item.ds || []).map(d =>
+          `<span style="color:#1565c0;font-weight:600">${d.c}</span> <span style="color:#888">${d.n || ''}</span>`
+        ).join(', ');
+        return `<div style="padding:2px 0;font-size:0.74rem">
+          <span class="ver-type ver-type-dep">廢棄</span>
+          <span style="color:#c62828">${item.s}</span> <span style="color:#888">${item.sn || ''}</span> → ${dests}
+        </div>`;
+      } else if (item.t === 'cross') {
+        return `<div style="padding:2px 0;font-size:0.74rem">
+          <span class="ver-type ver-type-cross">跨類</span>
+          <span style="color:#555">${item.f}</span> <span style="color:#888">${item.fn || ''}</span>
+          → <span style="color:#1565c0;font-weight:600">${item.to}</span> <span style="color:#888">${item.tn || ''}</span>
+        </div>`;
+      } else {
+        return `<div style="padding:2px 0;font-size:0.74rem">
+          <span class="ver-type ver-type-int">內部</span>
+          <span style="color:#555">${item.s}</span> <span style="color:#888">${item.sn || ''}</span>
+        </div>`;
+      }
+    }).join('');
+    return `<div style="margin-bottom:3px">
+      <div style="cursor:pointer;display:flex;align-items:center;gap:4px" onclick="var el=document.getElementById('${id}');el.style.display=el.style.display==='none'?'block':'none'">
+        <span style="font-size:0.65rem;color:#999">▶</span>
+        <span style="display:inline-block;background:#fff3e0;padding:1px 5px;border-radius:3px;font-size:0.68rem;font-weight:600">${ver}</span>
+        <span style="font-size:0.72rem;color:#555">${items.length} 筆</span>
+      </div>
+      <div id="${id}" style="display:none;padding:2px 0 2px 16px;border-left:2px solid #ffe0b2;margin:2px 0 2px 8px">${detail}</div>
+    </div>`;
+  }).join('');
+}
+
+// Table
+let _section = 'all';
+let _changedOnly = false;
+
+function filterAll(sec) {
+  _section = sec;
+  ['all','A','B','C','D','E','F','G','H'].forEach(s => {
+    const btn = document.getElementById('fb-' + s);
+    if (btn) { if (s === sec) { btn.classList.add('active'); btn.style.background = btn.style.borderColor; } else { btn.classList.remove('active'); btn.style.background = '#fff'; } }
+  });
+  renderTable();
+}
+function toggleChangedOnly() {
+  _changedOnly = !_changedOnly;
+  const btn = document.getElementById('fb-changed');
+  if (_changedOnly) { btn.classList.add('active'); btn.style.background = btn.style.borderColor; }
+  else { btn.classList.remove('active'); btn.style.background = '#fff'; }
+  renderTable();
+}
+
+function renderTable() {
+  let data = [...CLASS_DATA];
+  if (_section !== 'all') data = data.filter(c => c.c.startsWith(_section));
+  if (_changedOnly) data = data.filter(c => c.a === 'has_changes');
+  data.sort((a, b) => (a.a === 'has_changes' ? 0 : 1) - (b.a === 'has_changes' ? 0 : 1) || a.c.localeCompare(b.c));
+  const ch = data.filter(c => c.a === 'has_changes').length;
+  document.getElementById('table-count').textContent = `${data.length} 個 class（${ch} 有異動）`;
+  document.getElementById('class-tbody').innerHTML = data.map(c => {
+    const badge = c.a === 'has_changes' ? '<span class="badge badge-change">有異動</span>' : '<span class="badge badge-ok">無異動</span>';
+    return `<tr>
+      <td><span style="font-weight:700;color:#2c3e50;cursor:pointer" onclick="document.getElementById('cls-input').value='${c.c}';tryQuery();window.scrollTo({top:0,behavior:'smooth'})">${c.c}</span></td>
+      <td style="font-size:0.78rem;color:#555">${c.d}</td>
+      <td>${badge}</td>
+      <td>${renderVerDetail(c.vd)}</td>
+    </tr>`;
+  }).join('');
+}
+renderTable();
+
+// Query
+function tryEx(cls) { document.getElementById('cls-input').value = cls; tryQuery(); }
+function tryQuery() {
+  const raw = document.getElementById('cls-input').value.trim().toUpperCase();
+  if (!raw) return;
+  const area = document.getElementById('query-result');
+
+  const m = raw.match(/^([A-H]\d{2})/);
+  if (!m) {
+    area.innerHTML = `<div class="result-card unchanged">請輸入三碼 IPC class，如 H01、B23、G06</div>`;
+    return;
+  }
+  const cls = m[1];
+  const entry = CLASS_DATA.find(x => x.c === cls);
+  if (!entry) {
+    area.innerHTML = `<div class="result-card unchanged"><strong>${cls}</strong> — 未找到此 class</div>`;
+    return;
+  }
+
+  if (entry.a === 'unchanged') {
+    area.innerHTML = `<div class="result-card unchanged">
+      <div style="font-weight:700;font-size:1rem">無異動</div>
+      <div style="color:#555">${cls} — ${entry.d}</div>
+      <div style="font-size:0.85rem;color:#888;margin-top:4px">此 class 在所有 IPC 版本中均無跨分類異動。</div>
+    </div>`;
+  } else {
+    const verEntries = Object.entries(entry.vd || {});
+    const verRows = verEntries.map(([ver, items]) => {
+      if (!Array.isArray(items)) return '';
+      const chips = items.map(item => {
+        if (item.t === 'dep') {
+          const dests = (item.ds || []).map(d =>
+            `<span class="ver-chip" onclick="document.getElementById('cls-input').value='${d.c.substring(0,3)}';tryQuery()">${d.c}</span><span class="ver-name">${d.n || ''}</span>`
+          ).join('<span class="ver-sep">、</span>');
+          return `<span class="ver-type ver-type-dep">廢棄</span><span style="color:#888;font-size:0.78rem">${item.s} ${item.sn || ''}</span> <span class="ver-arrow">→</span> ${dests}`;
+        } else if (item.t === 'cross') {
+          return `<span class="ver-type ver-type-cross">跨類</span><span style="color:#888;font-size:0.78rem">${item.f} ${item.fn || ''}</span> <span class="ver-arrow">→</span> <span class="ver-chip" onclick="document.getElementById('cls-input').value='${(item.to||'').substring(0,3)}';tryQuery()">${item.to}</span><span class="ver-name">${item.tn || ''}</span>`;
+        } else {
+          return `<span class="ver-type ver-type-int">內部</span><span class="ver-chip" onclick="document.getElementById('cls-input').value='${(item.s||'').substring(0,3)}';tryQuery()">${item.s}</span><span class="ver-name">${item.sn || ''}</span>`;
+        }
+      });
+      return `<div class="ver-row">
+        <span class="ver-label">${ver}</span>
+      </div>` + chips.map(c => `<div class="ver-row" style="padding-left:16px">${c}</div>`).join('');
+    }).join('');
+    area.innerHTML = `<div class="result-card has_changes">
+      <div style="font-weight:700;font-size:1rem;color:#e65100">有異動</div>
+      <div style="color:#555;margin-bottom:6px">${cls} — ${entry.d}</div>
+      ${verRows}
+    </div>`;
+  }
+}
+document.getElementById('cls-input').addEventListener('keydown', e => { if (e.key === 'Enter') tryQuery(); });
+
+// CSV Upload
+function handleUpload(file) {
+  if (!file) return;
+  const status = document.getElementById('upload-status');
+  status.style.display = 'block';
+  status.innerHTML = '<div style="color:#3498db">讀取中...</div>';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const lines = e.target.result.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) { status.innerHTML = '<div style="color:#c62828">檔案為空</div>'; return; }
+    const delim = file.name.endsWith('.tsv') ? '\t' : ',';
+    const headers = lines[0].split(delim).map(h => h.replace(/"/g, '').trim());
+    const ipcCandidates = headers.filter(h => /ipc|分類|class/i.test(h));
+    const ipcIdx = ipcCandidates.length > 0 ? headers.indexOf(ipcCandidates[0]) : -1;
+    if (ipcIdx === -1) {
+      status.innerHTML = `<div>請選擇 IPC 欄位：</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${headers.map((h,i) => `<button onclick="runUpload(${i})" style="padding:3px 8px;border:1px solid #3498db;border-radius:4px;background:#fff;color:#3498db;cursor:pointer;font-size:0.82rem">${h}</button>`).join('')}</div>`;
+      window._uploadLines = lines; window._uploadDelim = delim;
+      return;
+    }
+    doUploadAnalysis(lines, delim, ipcIdx);
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+function runUpload(idx) { doUploadAnalysis(window._uploadLines, window._uploadDelim, idx); }
+function doUploadAnalysis(lines, delim, ipcIdx) {
+  let unchanged = 0, changed = 0;
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(delim).map(c => c.replace(/^"|"$/g, '').trim());
+    const ipc = (cols[ipcIdx] || '').toUpperCase();
+    const clsMatch = ipc.match(/[A-H]\d{2}/);
+    if (!clsMatch) continue;
+    const cls = clsMatch[0];
+    const c = CLASS_DATA.find(x => x.c === cls);
+    if (c && c.a === 'has_changes') changed++; else unchanged++;
+  }
+  const total = unchanged + changed;
+  document.getElementById('upload-status').innerHTML = `<div style="color:#2e7d32;font-weight:600">分析完成：${total} 筆</div>`;
+  const res = document.getElementById('upload-result');
+  res.style.display = 'block';
+  res.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0">
+      <div style="text-align:center;padding:10px;border-radius:8px;background:#e8f5e9"><div style="font-size:1.3rem;font-weight:700;color:#2e7d32">${unchanged}</div><div style="font-size:0.72rem;color:#666">無異動 ${(unchanged/total*100).toFixed(1)}%</div></div>
+      <div style="text-align:center;padding:10px;border-radius:8px;background:#fff3e0"><div style="font-size:1.3rem;font-weight:700;color:#e65100">${changed}</div><div style="font-size:0.72rem;color:#666">有異動 ${(changed/total*100).toFixed(1)}%</div></div>
+    </div>`;
+}
+
+</script>
+</body>
+</html>
