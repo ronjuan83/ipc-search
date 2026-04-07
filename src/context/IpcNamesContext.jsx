@@ -71,5 +71,3 @@ export function IpcNamesProvider({ children }) {
 export function useIpcNames() {
   return useContext(IpcNamesContext)
 }
-
-export default IpcNamesContext

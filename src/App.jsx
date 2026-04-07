@@ -584,10 +584,11 @@ function getVerFromUrl() {
   return params.get('ver') || ''
 }
 
+const initialIpc = getIpcFromUrl()
+const initialVer = getVerFromUrl()
+
 function AppInner() {
   const { getSubclassName } = useIpcNames()
-  const initialIpc = getIpcFromUrl()
-  const initialVer = getVerFromUrl()
   const [query, setQuery] = useState(initialIpc)
   const [input, setInput] = useState(initialIpc)
   const [data, setData] = useState(null)
@@ -605,21 +606,17 @@ function AppInner() {
   const skipPushRef = useRef(false) // avoid pushing state on popstate
 
   useEffect(() => {
-    fetch(`${import.meta.env.BASE_URL}ipc_data.json`)
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
-      })
-      .then(d => {
+    const base = import.meta.env.BASE_URL
+    Promise.all([
+      fetch(`${base}ipc_data.json`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() }),
+      fetch(`${base}ipc_groups.json`).then(r => r.ok ? r.json() : null).catch(() => null),
+    ])
+      .then(([d, g]) => {
         setData(d)
         setGroupIndex(buildGroupIndex(d.subclass_index))
         setFlowGraph(buildFlowGraph(d.subclass_index))
+        if (g) setIpcGroups(g)
         setLoading(false)
-        // Load auxiliary data (non-blocking) — names/titles now handled by IpcNamesContext
-        fetch(`${import.meta.env.BASE_URL}ipc_groups.json`)
-          .then(r => r.ok ? r.json() : null)
-          .then(g => { if (g) setIpcGroups(g) })
-          .catch(() => {})
       })
       .catch(e => { setError(e.message); setLoading(false) })
   }, [])
@@ -789,12 +786,13 @@ function AppInner() {
           if (fallbackEntries.length > 0) {
             // Deduplicate and inject into groupIndex for this session
             const seen = new Set()
-            groupIndex[normalized] = fallbackEntries.filter(e => {
+            const deduped = fallbackEntries.filter(e => {
               const key = JSON.stringify(e.record)
               if (seen.has(key)) return false
               seen.add(key)
               return true
             })
+            setGroupIndex(prev => ({ ...prev, [normalized]: deduped }))
             result = { type: 'group-exact', code: normalized }
           }
         }

@@ -13,14 +13,30 @@
 
 ```
 src/
-  App.jsx          主元件：搜尋框、自動完成、SubclassCard、PrefixList
-  App.css          所有樣式
-  index.css        最小 reset CSS（不含 Vite 模板樣式）
-  main.jsx         React 入口
+  App.jsx                  主元件：搜尋框、自動完成、SubclassCard、PrefixList
+  App.css                  所有樣式
+  index.css                最小 reset CSS
+  main.jsx                 React 入口
+  components/
+    DstCell.jsx            可點擊的 IPC 代碼連結（含 title hint）
+    StatusBadge.jsx        代碼狀態標籤（現行/新增/廢棄/已遷移）
+    TechClassifier.jsx     技術關鍵詞反查 IPC（Fuse.js + WIPO IPCCAT）
+  context/
+    IpcNamesContext.jsx    中英文名稱查詢 Context
+  utils/
+    ipcParser.js           IPC 代碼解析、範圍展開
+    groupIndex.js          組號 → 關聯記錄索引
+    flowGraph.js           有向圖、跨版本流變追蹤
 
 public/
-  ipc_data.json          主資料（273 KB）— introduced_in / deprecated_to / subclass_index
-  ipc_subclass_index.json  完整索引（385 KB）
+  ipc_data.json            主資料（273 KB）— introduced_in / deprecated_to / subclass_index
+  ipc_names.json           Subclass 中文名稱
+  ipc_group_titles.json    Group 中英文名稱
+  ipc_groups.json          所有 Group 碼列表
+  tech_keywords.json       技術關鍵詞（TechClassifier 用）
+  reclassify.html          批次重分類（五階）
+  reclassify-2.html        重分類二階（Class，三碼）
+  reclassify-class.html    重分類三階（Subclass，四碼）
   IPC_CONCORDANCE_MAP.md   IPC 版本異動詳細文件
 
 .github/workflows/deploy.yml   push main → 自動 build → peaceiris 推送 gh-pages

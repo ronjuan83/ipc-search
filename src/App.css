@@ -694,6 +694,7 @@ body {
   border-bottom: 1px solid var(--border-light);
   border-right: 1px solid var(--border-light);
   transition: background 0.1s;
+  cursor: pointer;
 }
 
 .prefix-item:hover {
@@ -1083,6 +1084,43 @@ body {
   font-size: 0.75rem;
   color: var(--text-muted);
   margin-left: auto;
+}
+
+/* ── Extracted inline styles ── */
+.card-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.group-card-badges {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.flow-sub-chip-sm {
+  font-size: 0.75rem;
+  padding: 1px 5px;
+}
+.flow-arrow-sm {
+  color: #adb5bd;
+  font-size: 0.75rem;
+}
+.flow-count-sm {
+  font-size: 0.7rem;
+  color: #6c757d;
+}
+.tech-abstract-badge {
+  font-size: 0.72rem;
+  color: #6c757d;
+  margin-left: 8px;
+}
+.tech-ipccat-section {
+  margin-top: 8px;
+}
+.tech-zh-warning {
+  margin-top: 8px;
+  font-size: 0.75rem;
+  color: #e67e22;
 }
 
 /* ── Mobile ── */
