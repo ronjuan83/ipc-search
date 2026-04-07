@@ -35,8 +35,8 @@ public/
   ipc_groups.json          所有 Group 碼列表
   tech_keywords.json       技術關鍵詞（TechClassifier 用）
   reclassify.html          批次重分類（五階）
-  reclassify-2.html        重分類二階（Class，三碼）
-  reclassify-class.html    重分類三階（Subclass，四碼）
+  reclassify-class.html    重分類二階（Class，三碼）
+  reclassify-subclass.html 重分類三階（Subclass，四碼）
   IPC_CONCORDANCE_MAP.md   IPC 版本異動詳細文件
 
 .github/workflows/deploy.yml   push main → 自動 build → peaceiris 推送 gh-pages
