@@ -111,11 +111,11 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
   </div>
 
   <div class="card">
-    <h2>模擬分析（1,000 筆隨機 IPC）</h2>
+    <h2>模擬分析（5,000 筆隨機 IPC）</h2>
     <p style="font-size:0.85rem;color:#555;margin-bottom:12px">
-      隨機取樣 1,000 筆 IPC 代碼，以 class（三碼）層級判斷是否有異動。
+      以 IPC 分布加權隨機取樣 5,000 筆專利代碼（B 類加重），以 class（三碼）層級判斷是否有異動。
     </p>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px" id="sim-stats"></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px" id="sim-stats"></div>
     <div style="margin-bottom:12px" id="sim-bar"></div>
     <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
       <button onclick="simFilter('all')" class="filter-btn active" style="border-color:#3498db;color:#3498db" id="sf-all">全部</button>
@@ -521,21 +521,20 @@ CLASS_DATA.forEach(c => {
       }
     });
   });
-  const action = hasDep ? 'dep' : hasCross ? 'cross' : 'int_only';
+  const action = hasDep ? 'dep' : hasCross ? 'cross' : 'unchanged';
   CLASS_INFO[c.c] = { action, dests: [...dests].sort() };
 });
 
 const ALL_CLASSES = CLASS_DATA.map(c => c.c);
 const BADGE_MAP = {
   unchanged: '<span class="badge badge-ok">不需處理</span>',
-  int_only:  '<span class="badge" style="background:#e3f2fd;color:#1565c0">僅內部調整</span>',
   cross:     '<span class="badge" style="background:#fce4ec;color:#c62828">跨類異動</span>',
   dep:       '<span class="badge badge-change">有廢棄</span>',
 };
-const ACTION_ORDER = { dep: 0, cross: 1, int_only: 2, unchanged: 3 };
+const ACTION_ORDER = { dep: 0, cross: 1, unchanged: 2 };
 
 function generateSamples(n) {
-  const weights = {A:12, B:22, C:14, D:4, E:6, F:12, G:16, H:14};
+  const weights = {A:10, B:30, C:12, D:3, E:5, F:10, G:16, H:14};
   const sections = Object.keys(weights);
   const totalW = Object.values(weights).reduce((a,b) => a+b, 0);
   const results = [];
@@ -557,9 +556,9 @@ function generateSamples(n) {
 function clsName(c3) { const f = CLASS_DATA.find(x => x.c === c3); return f ? f.d : ''; }
 
 function runSimulation() {
-  const results = generateSamples(1000);
+  const results = generateSamples(5000);
   window._simResults = results;
-  const counts = { unchanged: 0, int_only: 0, cross: 0, dep: 0 };
+  const counts = { unchanged: 0, cross: 0, dep: 0 };
   results.forEach(r => counts[r.action]++);
   const total = results.length;
   const pct = n => (n/total*100).toFixed(1);
@@ -568,10 +567,6 @@ function runSimulation() {
     <div style="text-align:center;padding:10px;border-radius:8px;background:#e8f5e9">
       <div style="font-size:1.4rem;font-weight:700;color:#2e7d32">${counts.unchanged}</div>
       <div style="font-size:0.7rem;color:#666">不需處理 ${pct(counts.unchanged)}%</div>
-    </div>
-    <div style="text-align:center;padding:10px;border-radius:8px;background:#e3f2fd">
-      <div style="font-size:1.4rem;font-weight:700;color:#1565c0">${counts.int_only}</div>
-      <div style="font-size:0.7rem;color:#666">僅內部調整 ${pct(counts.int_only)}%</div>
     </div>
     <div style="text-align:center;padding:10px;border-radius:8px;background:#fce4ec">
       <div style="font-size:1.4rem;font-weight:700;color:#c62828">${counts.cross}</div>
@@ -586,27 +581,25 @@ function runSimulation() {
   const sections = {};
   results.forEach(r => {
     const sec = r.cls[0];
-    if (!sections[sec]) sections[sec] = { total:0, int:0, cross:0, dep:0 };
+    if (!sections[sec]) sections[sec] = { total:0, cross:0, dep:0 };
     sections[sec].total++;
-    if (r.action === 'int_only') sections[sec].int++;
-    else if (r.action === 'cross') sections[sec].cross++;
+    if (r.action === 'cross') sections[sec].cross++;
     else if (r.action === 'dep') sections[sec].dep++;
   });
   document.getElementById('sim-bar').innerHTML = Object.entries(sections).sort().map(([sec, s]) => {
-    const changed = s.int + s.cross + s.dep;
+    const changed = s.cross + s.dep;
     const pctC = (changed / s.total * 100).toFixed(0);
-    const wI = s.int/s.total*100, wC = s.cross/s.total*100, wD = s.dep/s.total*100;
+    const wC = s.cross/s.total*100, wD = s.dep/s.total*100;
     return `<div style="display:flex;align-items:center;margin-bottom:4px">
       <span style="width:25px;font-weight:600;font-size:0.85rem">${sec}</span>
       <div style="flex:1;height:18px;background:#e8f5e9;border-radius:9px;overflow:hidden;display:flex">
-        <div style="width:${wI}%;background:#2196f3" title="僅內部調整 ${s.int}"></div>
         <div style="width:${wC}%;background:#e91e63" title="跨類異動 ${s.cross}"></div>
         <div style="width:${wD}%;background:#ff9800" title="有廢棄 ${s.dep}"></div>
       </div>
       <span style="width:90px;text-align:right;font-size:0.75rem;color:#666">${changed}/${s.total} (${pctC}%)</span>
     </div>`;
   }).join('') + `<div style="display:flex;gap:12px;font-size:0.7rem;color:#888;margin-top:4px;justify-content:center">
-    <span>🟢 不需處理</span><span>🔵 僅內部</span><span>🔴 跨類異動</span><span>🟠 有廢棄</span>
+    <span>🟢 不需處理</span><span>🔴 跨類異動</span><span>🟠 有廢棄</span>
   </div>`;
 
   renderSim();
@@ -648,9 +641,7 @@ function renderSimPage() {
   const show = Math.min(window._simShowCount || 200, filtered.length);
   const rows = filtered.slice(0, show).map((r, i) => {
     let resultCol = '—';
-    if (r.action === 'int_only') {
-      resultCol = `<span style="color:#1565c0">${r.cls}</span> <span style="color:#888">內部調整，不影響 class 歸屬</span>`;
-    } else if (r.action === 'cross') {
+    if (r.action === 'cross') {
       resultCol = r.dests.map(d => `→ <span style="color:#c62828;font-weight:600">${d}</span> <span style="font-size:0.7rem;color:#888">${clsName(d)}</span>`).join('<br>');
     } else if (r.action === 'dep') {
       resultCol = r.dests.length > 0
