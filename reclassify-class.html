@@ -33,6 +33,13 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
 .result-card { padding: 16px; border-radius: 8px; margin-top: 12px; font-size: 0.9rem; }
 .result-card.unchanged { background: #e8f5e9; border-left: 4px solid #4caf50; }
 .result-card.has_changes { background: #fff3e0; border-left: 4px solid #ff9800; }
+.ver-row { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; flex-wrap: wrap; }
+.ver-label { font-size: 0.72rem; font-weight: 700; font-family: 'SF Mono','Fira Code',monospace; color: #084298; background: #e7f1ff; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.ver-chip { font-family: 'SF Mono','Fira Code',monospace; font-size: 0.8rem; font-weight: 600; color: #0d6efd; cursor: pointer; }
+.ver-chip:hover { text-decoration: underline; }
+.ver-arrow { color: #adb5bd; font-size: 0.8rem; }
+.ver-name { font-size: 0.75rem; color: #6c757d; margin-left: 2px; }
+.ver-sep { color: #dee2e6; margin: 0 2px; }
 .filter-btn { padding: 4px 10px; border: 2px solid; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.8rem; font-weight: 600; transition: all 0.15s; }
 .filter-btn:hover { opacity: 0.8; }
 .filter-btn.active { color: #fff !important; }
@@ -582,14 +589,24 @@ function tryQuery() {
       <div style="font-weight:700;font-size:1rem">無異動</div>
       <div style="color:#555">${sub}${subName ? ` — ${subName}` : ''}</div>
       <div style="font-size:0.85rem;color:#888;margin-top:4px">此 subclass 在所有 IPC 版本中均無異動。</div>
-      <a href="./?ipc=${sub}" style="display:inline-block;margin-top:6px;color:#3498db;font-size:0.85rem;text-decoration:none">在歷史查詢中查看 →</a>
     </div>`;
   } else {
+    const verEntries = Object.entries(entry.vers || {});
+    const verRows = verEntries.map(([ver, items]) => {
+      const chips = items.map(item => {
+        const fullName = subNames[item.dstSub] || '';
+        return `<span class="ver-chip" onclick="document.getElementById('cls-input').value='${item.dstSub}';tryQuery()">${item.dstSub}</span>`
+          + (fullName ? `<span class="ver-name">${fullName}</span>` : '');
+      });
+      return `<div class="ver-row">
+        <span class="ver-label">${ver}</span>
+        <span class="ver-arrow">→</span> ${chips.join('<span class="ver-sep">、</span>')}
+      </div>`;
+    }).join('');
     area.innerHTML = `<div class="result-card has_changes">
       <div style="font-weight:700;font-size:1rem;color:#e65100">有異動</div>
-      <div style="color:#555;margin-bottom:8px">${sub}${subName ? ` — ${subName}` : ''}</div>
-      <div style="margin-top:6px">${renderSubVerDetail(entry.vers)}</div>
-      <a href="./?ipc=${sub}" style="display:inline-block;margin-top:8px;color:#3498db;font-size:0.85rem;text-decoration:none">在歷史查詢中查看 ${sub} 的完整異動 →</a>
+      <div style="color:#555;margin-bottom:6px">${sub}${subName ? ` — ${subName}` : ''}</div>
+      ${verRows}
     </div>`;
   }
 }
