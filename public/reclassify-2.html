@@ -115,7 +115,7 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
     <p style="font-size:0.85rem;color:#555;margin-bottom:12px">
       隨機取樣 1,000 筆 IPC 代碼，以 class（三碼）層級判斷是否有異動。
     </p>
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px" id="sim-stats"></div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px" id="sim-stats"></div>
     <div style="margin-bottom:12px" id="sim-bar"></div>
     <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
       <button onclick="simFilter('all')" class="filter-btn active" style="border-color:#3498db;color:#3498db" id="sf-all">全部</button>
@@ -133,7 +133,7 @@ h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; }
     </div>
     <div class="scroll-box" style="max-height:400px">
       <table class="sample-table">
-        <thead><tr><th>#</th><th>IPC 代碼</th><th>Class</th><th>狀態</th><th>說明</th></tr></thead>
+        <thead><tr><th>#</th><th>IPC 代碼</th><th>Class</th><th>狀態</th><th>結果 / 建議</th><th>說明</th></tr></thead>
         <tbody id="sim-tbody"></tbody>
       </table>
     </div>
@@ -499,74 +499,114 @@ function doUploadAnalysis(lines, delim, ipcIdx) {
     </div>`;
 }
 
-// === Simulation 1000 samples ===
-const ALL_CLASSES = CLASS_DATA.map(c => c.c);
-const CHANGED_SET = new Set(CLASS_DATA.filter(c => c.a === 'has_changes').map(c => c.c));
+// === Precompute class-level change types ===
+// 4 types: unchanged, int_only (僅內部調整), cross (跨類異動), dep (有廢棄)
+const CLASS_INFO = {};
+CLASS_DATA.forEach(c => {
+  if (c.a === 'unchanged') { CLASS_INFO[c.c] = { action: 'unchanged', dests: [] }; return; }
+  const dests = new Set();
+  let hasCross = false, hasDep = false;
+  Object.values(c.vd || {}).forEach(items => {
+    if (!Array.isArray(items)) return;
+    items.forEach(item => {
+      if (item.t === 'cross') {
+        const toCls = (item.to || '').substring(0, 3);
+        if (toCls !== c.c) { hasCross = true; dests.add(toCls); }
+      } else if (item.t === 'dep') {
+        hasDep = true;
+        (item.ds || []).forEach(d => {
+          const dCls = (d.c || '').substring(0, 3);
+          if (dCls !== c.c) dests.add(dCls);
+        });
+      }
+    });
+  });
+  const action = hasDep ? 'dep' : hasCross ? 'cross' : 'int_only';
+  CLASS_INFO[c.c] = { action, dests: [...dests].sort() };
+});
 
-// Generate 1000 random IPC codes with weighted distribution
+const ALL_CLASSES = CLASS_DATA.map(c => c.c);
+const BADGE_MAP = {
+  unchanged: '<span class="badge badge-ok">不需處理</span>',
+  int_only:  '<span class="badge" style="background:#e3f2fd;color:#1565c0">僅內部調整</span>',
+  cross:     '<span class="badge" style="background:#fce4ec;color:#c62828">跨類異動</span>',
+  dep:       '<span class="badge badge-change">有廢棄</span>',
+};
+const ACTION_ORDER = { dep: 0, cross: 1, int_only: 2, unchanged: 3 };
+
 function generateSamples(n) {
-  // Weight by section: B heavier (more patent-dense)
   const weights = {A:12, B:22, C:14, D:4, E:6, F:12, G:16, H:14};
   const sections = Object.keys(weights);
   const totalW = Object.values(weights).reduce((a,b) => a+b, 0);
   const results = [];
   for (let i = 0; i < n; i++) {
-    // Pick section by weight
     let r = Math.random() * totalW, sec = 'B';
     for (const s of sections) { r -= weights[s]; if (r <= 0) { sec = s; break; } }
-    // Pick a random class in that section
     const candidates = ALL_CLASSES.filter(c => c.startsWith(sec));
     const cls = candidates[Math.floor(Math.random() * candidates.length)];
-    // Generate a fake group code
     const mainG = Math.floor(Math.random() * 99) + 1;
     const subG = String(Math.floor(Math.random() * 99)).padStart(2, '0');
     const code = cls + String.fromCharCode(65 + Math.floor(Math.random() * 4)) + ' ' + mainG + '/' + subG;
     const entry = CLASS_DATA.find(x => x.c === cls);
-    const action = CHANGED_SET.has(cls) ? 'has_changes' : 'unchanged';
-    results.push({ code, cls, action, desc: entry ? entry.d : '' });
+    const info = CLASS_INFO[cls] || { action: 'unchanged', dests: [] };
+    results.push({ code, cls, action: info.action, dests: info.dests, desc: entry ? entry.d : '' });
   }
   return results;
 }
 
+function clsName(c3) { const f = CLASS_DATA.find(x => x.c === c3); return f ? f.d : ''; }
+
 function runSimulation() {
   const results = generateSamples(1000);
   window._simResults = results;
-  const unchanged = results.filter(r => r.action === 'unchanged').length;
-  const changed = results.filter(r => r.action === 'has_changes').length;
+  const counts = { unchanged: 0, int_only: 0, cross: 0, dep: 0 };
+  results.forEach(r => counts[r.action]++);
   const total = results.length;
   const pct = n => (n/total*100).toFixed(1);
 
   document.getElementById('sim-stats').innerHTML = `
-    <div style="text-align:center;padding:12px;border-radius:8px;background:#e8f5e9">
-      <div style="font-size:1.6rem;font-weight:700;color:#2e7d32">${unchanged}</div>
-      <div style="font-size:0.72rem;color:#666">無異動 ${pct(unchanged)}%</div>
+    <div style="text-align:center;padding:10px;border-radius:8px;background:#e8f5e9">
+      <div style="font-size:1.4rem;font-weight:700;color:#2e7d32">${counts.unchanged}</div>
+      <div style="font-size:0.7rem;color:#666">不需處理 ${pct(counts.unchanged)}%</div>
     </div>
-    <div style="text-align:center;padding:12px;border-radius:8px;background:#fff3e0">
-      <div style="font-size:1.6rem;font-weight:700;color:#e65100">${changed}</div>
-      <div style="font-size:0.72rem;color:#666">有異動 ${pct(changed)}%</div>
+    <div style="text-align:center;padding:10px;border-radius:8px;background:#e3f2fd">
+      <div style="font-size:1.4rem;font-weight:700;color:#1565c0">${counts.int_only}</div>
+      <div style="font-size:0.7rem;color:#666">僅內部調整 ${pct(counts.int_only)}%</div>
+    </div>
+    <div style="text-align:center;padding:10px;border-radius:8px;background:#fce4ec">
+      <div style="font-size:1.4rem;font-weight:700;color:#c62828">${counts.cross}</div>
+      <div style="font-size:0.7rem;color:#666">跨類異動 ${pct(counts.cross)}%</div>
+    </div>
+    <div style="text-align:center;padding:10px;border-radius:8px;background:#fff3e0">
+      <div style="font-size:1.4rem;font-weight:700;color:#e65100">${counts.dep}</div>
+      <div style="font-size:0.7rem;color:#666">有廢棄 ${pct(counts.dep)}%</div>
     </div>`;
 
   // Stacked bar by section
   const sections = {};
   results.forEach(r => {
     const sec = r.cls[0];
-    if (!sections[sec]) sections[sec] = { total: 0, changed: 0 };
+    if (!sections[sec]) sections[sec] = { total:0, int:0, cross:0, dep:0 };
     sections[sec].total++;
-    if (r.action === 'has_changes') sections[sec].changed++;
+    if (r.action === 'int_only') sections[sec].int++;
+    else if (r.action === 'cross') sections[sec].cross++;
+    else if (r.action === 'dep') sections[sec].dep++;
   });
   document.getElementById('sim-bar').innerHTML = Object.entries(sections).sort().map(([sec, s]) => {
-    const pctC = (s.changed / s.total * 100).toFixed(0);
-    const w = s.changed / s.total * 100;
+    const changed = s.int + s.cross + s.dep;
+    const pctC = (changed / s.total * 100).toFixed(0);
+    const wI = s.int/s.total*100, wC = s.cross/s.total*100, wD = s.dep/s.total*100;
     return `<div style="display:flex;align-items:center;margin-bottom:4px">
       <span style="width:25px;font-weight:600;font-size:0.85rem">${sec}</span>
       <div style="flex:1;height:18px;background:#e8f5e9;border-radius:9px;overflow:hidden;display:flex">
-        <div style="width:${w}%;background:#ff9800" title="有異動 ${s.changed}"></div>
+        <div style="width:${wI}%;background:#2196f3" title="僅內部調整 ${s.int}"></div>
+        <div style="width:${wC}%;background:#e91e63" title="跨類異動 ${s.cross}"></div>
+        <div style="width:${wD}%;background:#ff9800" title="有廢棄 ${s.dep}"></div>
       </div>
-      <span style="width:90px;text-align:right;font-size:0.75rem;color:#666">${s.changed}/${s.total} (${pctC}%)</span>
+      <span style="width:90px;text-align:right;font-size:0.75rem;color:#666">${changed}/${s.total} (${pctC}%)</span>
     </div>`;
   }).join('') + `<div style="display:flex;gap:12px;font-size:0.7rem;color:#888;margin-top:4px;justify-content:center">
-    <span style="display:inline-flex;align-items:center;gap:3px"><span style="width:10px;height:10px;border-radius:2px;background:#e8f5e9;border:1px solid #ccc"></span>無異動</span>
-    <span style="display:inline-flex;align-items:center;gap:3px"><span style="width:10px;height:10px;border-radius:2px;background:#ff9800"></span>有異動</span>
+    <span>🟢 不需處理</span><span>🔵 僅內部</span><span>🔴 跨類異動</span><span>🟠 有廢棄</span>
   </div>`;
 
   renderSim();
@@ -594,10 +634,10 @@ function toggleSimChanged() {
 function renderSim() {
   const all = window._simResults || [];
   let filtered = _simSection === 'all' ? [...all] : all.filter(r => r.cls.startsWith(_simSection));
-  if (_simChangedOnly) filtered = filtered.filter(r => r.action === 'has_changes');
-  filtered.sort((a, b) => (a.action === 'has_changes' ? 0 : 1) - (b.action === 'has_changes' ? 0 : 1) || a.cls.localeCompare(b.cls));
-  const ch = filtered.filter(r => r.action === 'has_changes').length;
-  document.getElementById('sim-count').textContent = `${filtered.length} 筆（${ch} 有異動）`;
+  if (_simChangedOnly) filtered = filtered.filter(r => r.action !== 'unchanged');
+  filtered.sort((a, b) => (ACTION_ORDER[a.action] ?? 9) - (ACTION_ORDER[b.action] ?? 9) || a.cls.localeCompare(b.cls));
+  const ch = filtered.filter(r => r.action !== 'unchanged').length;
+  document.getElementById('sim-count').textContent = `${filtered.length} 筆（${ch} 需處理）`;
   window._simShowCount = 200;
   window._simFiltered = filtered;
   renderSimPage();
@@ -607,19 +647,27 @@ function renderSimPage() {
   const filtered = window._simFiltered || [];
   const show = Math.min(window._simShowCount || 200, filtered.length);
   const rows = filtered.slice(0, show).map((r, i) => {
-    const badge = r.action === 'has_changes'
-      ? '<span class="badge badge-change">有異動</span>'
-      : '<span class="badge badge-ok">無異動</span>';
+    let resultCol = '—';
+    if (r.action === 'int_only') {
+      resultCol = `<span style="color:#1565c0">${r.cls}</span> <span style="color:#888">內部調整，不影響 class 歸屬</span>`;
+    } else if (r.action === 'cross') {
+      resultCol = r.dests.map(d => `→ <span style="color:#c62828;font-weight:600">${d}</span> <span style="font-size:0.7rem;color:#888">${clsName(d)}</span>`).join('<br>');
+    } else if (r.action === 'dep') {
+      resultCol = r.dests.length > 0
+        ? r.dests.map(d => `→ <span style="color:#e65100;font-weight:600">${d}</span> <span style="font-size:0.7rem;color:#888">${clsName(d)}</span>`).join('<br>')
+        : `<span style="color:#e65100">含廢棄 subclass（同 class 內合併）</span>`;
+    }
     return `<tr>
       <td>${i + 1}</td>
       <td><code>${r.code}</code></td>
       <td><strong>${r.cls}</strong></td>
-      <td>${badge}</td>
-      <td style="font-size:0.78rem;color:#555">${r.desc}</td>
+      <td>${BADGE_MAP[r.action]}</td>
+      <td style="font-size:0.78rem">${resultCol}</td>
+      <td style="font-size:0.72rem;color:#777">${r.desc}</td>
     </tr>`;
   }).join('');
   const more = filtered.length > show
-    ? `<tr><td colspan="5" style="text-align:center;padding:12px">
+    ? `<tr><td colspan="6" style="text-align:center;padding:12px">
         <button onclick="window._simShowCount+=200;renderSimPage()" style="padding:6px 20px;background:#3498db;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem">
           載入更多（已顯示 ${show} / ${filtered.length}）
         </button>
