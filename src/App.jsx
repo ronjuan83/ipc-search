@@ -92,7 +92,7 @@ function ReceivedSection({ received, onSearch, ipcGroups }) {
 }
 
 // Inline flow summary shown directly in SubclassCard
-function FlowSummary({ code, flowGraph, data, onSearch }) {
+function FlowSummary({ code, flowGraph, data, onSearch, activeVersionTransitions }) {
   if (!flowGraph) return null
   const isSubclass = /^[A-H]\d{2}[A-Z]$/.test(code)
   const rawFlow = isSubclass
@@ -104,7 +104,8 @@ function FlowSummary({ code, flowGraph, data, onSearch }) {
   const relevantEdges = rawFlow.edges.filter(e => {
     const fromSub = e.from.slice(0, 4)
     const toSub = e.to.slice(0, 4)
-    return fromSub === originSub || toSub === originSub
+    const isRelevantSub = fromSub === originSub || toSub === originSub
+    return isRelevantSub && (!activeVersionTransitions || activeVersionTransitions.has(e.version))
   })
   if (relevantEdges.length === 0) return null
 
@@ -172,13 +173,13 @@ function FlowSummary({ code, flowGraph, data, onSearch }) {
   )
 }
 
-function SubclassCard({ code, data, onSearch, ipcGroups, flowGraph, selectedVersion }) {
+function SubclassCard({ code, data, onSearch, ipcGroups, flowGraph, activeVersionTransitions, compareRange }) {
   const { getSubclassName } = useIpcNames()
   const entry = data.subclass_index[code] || {}
   const allDonated = entry.donated || []
   const allReceived = entry.received || []
-  const donated = selectedVersion ? allDonated.filter(r => r.version === selectedVersion) : allDonated
-  const received = selectedVersion ? allReceived.filter(r => r.version === selectedVersion) : allReceived
+  const donated = activeVersionTransitions ? allDonated.filter(r => activeVersionTransitions.has(r.version)) : allDonated
+  const received = activeVersionTransitions ? allReceived.filter(r => activeVersionTransitions.has(r.version)) : allReceived
   const name = getSubclassName(code)
   const intro = data.introduced_in[code]
   const depr = data.deprecated_to[code]
@@ -195,7 +196,8 @@ function SubclassCard({ code, data, onSearch, ipcGroups, flowGraph, selectedVers
   const relevantEdges = rawFlow.edges.filter(e => {
     const fromSub = e.from.slice(0, 4)
     const toSub = e.to.slice(0, 4)
-    return fromSub === originSub || toSub === originSub
+    const isRelevantSub = fromSub === originSub || toSub === originSub
+    return isRelevantSub && (!activeVersionTransitions || activeVersionTransitions.has(e.version))
   })
   const byVersion = {}
   relevantEdges.forEach(e => {
@@ -252,8 +254,20 @@ function SubclassCard({ code, data, onSearch, ipcGroups, flowGraph, selectedVers
         </div>
       )}
 
+      {compareRange && activeVersionTransitions && (
+        <div className="compare-summary-card">
+          <div className="compare-summary-title">兩版本比較摘要</div>
+          <div className="compare-summary-meta">
+            <span>{compareRange.from} → {compareRange.to}</span>
+            <span>涵蓋 {activeVersionTransitions.size} 次版本轉換</span>
+            <span>移出 {donated.length} 筆</span>
+            <span>移入 {received.length} 筆</span>
+          </div>
+        </div>
+      )}
+
       {viewTab === 'summary' && (
-        <FlowSummary code={code} flowGraph={flowGraph} data={data} onSearch={onSearch} />
+        <FlowSummary code={code} flowGraph={flowGraph} data={data} onSearch={onSearch} activeVersionTransitions={activeVersionTransitions} />
       )}
 
       {viewTab === 'list' && (
@@ -285,14 +299,18 @@ function SubclassCard({ code, data, onSearch, ipcGroups, flowGraph, selectedVers
 }
 
 // Card for exact group-level code (4th/5th level)
-function GroupCard({ code, groupIndex, onSearch, ipcGroups }) {
+function GroupCard({ code, groupIndex, onSearch, ipcGroups, activeVersionTransitions, compareRange }) {
   const { getSubclassName } = useIpcNames()
   const entries = groupIndex[code] || []
   const subclass = code.slice(0, 4)
   const subclassName = getSubclassName(subclass)
 
-  const donated = entries.filter(e => e.type === 'donated')
-  const received = entries.filter(e => e.type === 'received')
+  const filteredEntries = activeVersionTransitions
+    ? entries.filter(e => activeVersionTransitions.has(e.record.version))
+    : entries
+
+  const donated = filteredEntries.filter(e => e.type === 'donated')
+  const received = filteredEntries.filter(e => e.type === 'received')
 
   const byVersionDonated = {}
   donated.forEach(e => {
@@ -322,6 +340,18 @@ function GroupCard({ code, groupIndex, onSearch, ipcGroups }) {
           {received.length > 0 && <span className="badge badge-new">{received.length} 筆移入</span>}
         </div>
       </div>
+
+      {compareRange && activeVersionTransitions && (
+        <div className="compare-summary-card">
+          <div className="compare-summary-title">兩版本比較摘要</div>
+          <div className="compare-summary-meta">
+            <span>{compareRange.from} → {compareRange.to}</span>
+            <span>涵蓋 {activeVersionTransitions.size} 次版本轉換</span>
+            <span>移出 {donated.length} 筆</span>
+            <span>移入 {received.length} 筆</span>
+          </div>
+        </div>
+      )}
 
       {donated.length > 0 && (
         <div className="history-section">
@@ -424,7 +454,7 @@ function GroupList({ prefix, matches, groupIndex, onSelect }) {
   )
 }
 
-function PrefixList({ prefix, data, onSearch, selectedVersion }) {
+function PrefixList({ prefix, data, onSearch, activeVersionTransitions }) {
   const { getSubclassName } = useIpcNames()
   // Merge all known subclass codes from subclass_index, introduced_in, and deprecated_to
   const allCodes = new Set([
@@ -436,13 +466,13 @@ function PrefixList({ prefix, data, onSearch, selectedVersion }) {
     .filter(k => k.startsWith(prefix.toUpperCase()))
     .sort()
 
-  // Filter by version if selected
-  if (selectedVersion) {
+  // Filter by active transition set if selected
+  if (activeVersionTransitions) {
     matches = matches.filter(code => {
       const entry = data.subclass_index[code]
       if (!entry) return false
-      return (entry.donated || []).some(r => r.version === selectedVersion) ||
-             (entry.received || []).some(r => r.version === selectedVersion)
+      return (entry.donated || []).some(r => activeVersionTransitions.has(r.version)) ||
+             (entry.received || []).some(r => activeVersionTransitions.has(r.version))
     })
   }
 
@@ -574,6 +604,18 @@ function TimelineChart({ sortedVersions, byVersion, originSub, subColors, expand
 
 const EXAMPLES = ['H01L', 'B01J', 'G06K', 'B29D', 'H10B', 'B81B', 'G06Q', 'E21B', 'F24S', 'C40B']
 
+function parseTransitionVersion(verStr) {
+  const m = verStr.match(/(\d{4}\.\d{2})→(\d{4}\.\d{2})/)
+  if (!m) return null
+  return { from: m[1], to: m[2] }
+}
+
+function editionOrder(verStr) {
+  const m = verStr.match(/(\d{4})\.(\d{2})/)
+  if (!m) return 0
+  return parseInt(m[1], 10) * 100 + parseInt(m[2], 10)
+}
+
 // Read ?ipc= and ?ver= from URL
 function getIpcFromUrl() {
   const params = new URLSearchParams(window.location.search)
@@ -583,9 +625,24 @@ function getVerFromUrl() {
   const params = new URLSearchParams(window.location.search)
   return params.get('ver') || ''
 }
+function getModeFromUrl() {
+  const params = new URLSearchParams(window.location.search)
+  return params.get('mode') === 'compare' ? 'compare' : 'single'
+}
+function getFromFromUrl() {
+  const params = new URLSearchParams(window.location.search)
+  return params.get('from') || ''
+}
+function getToFromUrl() {
+  const params = new URLSearchParams(window.location.search)
+  return params.get('to') || ''
+}
 
 const initialIpc = getIpcFromUrl()
 const initialVer = getVerFromUrl()
+const initialMode = getModeFromUrl()
+const initialFrom = getFromFromUrl()
+const initialTo = getToFromUrl()
 
 function AppInner() {
   const { getSubclassName, loadGroupTitles } = useIpcNames()
@@ -599,7 +656,10 @@ function AppInner() {
   const [error, setError] = useState(null)
   const [suggestions, setSuggestions] = useState([])
   const [showSugg, setShowSugg] = useState(false)
+  const [viewMode, setViewMode] = useState(initialMode)
   const [selectedVersion, setSelectedVersion] = useState(initialVer) // '' = all versions
+  const [compareFrom, setCompareFrom] = useState(initialFrom)
+  const [compareTo, setCompareTo] = useState(initialTo)
 
   const inputRef = useRef(null)
   const suggRef = useRef(null)
@@ -622,18 +682,6 @@ function AppInner() {
       .catch(e => { setError(e.message); setLoading(false) })
   }, [])
 
-  // Build set of subclasses that have records in the selected version
-  const versionFilteredSubs = useMemo(() => {
-    if (!data || !selectedVersion) return null
-    const subs = new Set()
-    Object.entries(data.subclass_index).forEach(([sub, entry]) => {
-      const hasDonated = (entry.donated || []).some(r => r.version === selectedVersion)
-      const hasReceived = (entry.received || []).some(r => r.version === selectedVersion)
-      if (hasDonated || hasReceived) subs.add(sub)
-    })
-    return subs
-  }, [data, selectedVersion])
-
   // Memoize version dropdown options (avoid re-computing on every render)
   const versionOptions = useMemo(() => {
     if (!data) return []
@@ -644,6 +692,71 @@ function AppInner() {
     })
     return [...vers].sort((a, b) => versionOrder(a) - versionOrder(b))
   }, [data])
+
+  const editionOptions = useMemo(() => {
+    const editions = new Set()
+    versionOptions.forEach(ver => {
+      const parsed = parseTransitionVersion(ver)
+      if (!parsed) return
+      editions.add(parsed.from)
+      editions.add(parsed.to)
+    })
+    return [...editions].sort((a, b) => editionOrder(a) - editionOrder(b))
+  }, [versionOptions])
+
+  useEffect(() => {
+    if (!editionOptions.length) return
+    if (!compareFrom) setCompareFrom(editionOptions[0])
+    if (!compareTo) setCompareTo(editionOptions[editionOptions.length - 1])
+  }, [editionOptions, compareFrom, compareTo])
+
+  const compareError = useMemo(() => {
+    if (viewMode !== 'compare' || !compareFrom || !compareTo) return ''
+    if (editionOrder(compareFrom) >= editionOrder(compareTo)) {
+      return '起點版本必須早於終點版本。'
+    }
+    return ''
+  }, [viewMode, compareFrom, compareTo])
+
+  const compareTransitionList = useMemo(() => {
+    if (viewMode !== 'compare' || compareError || !compareFrom || !compareTo) return null
+    return versionOptions.filter(ver => {
+      const parsed = parseTransitionVersion(ver)
+      if (!parsed) return false
+      return editionOrder(parsed.from) >= editionOrder(compareFrom) &&
+             editionOrder(parsed.to) <= editionOrder(compareTo)
+    })
+  }, [viewMode, compareError, compareFrom, compareTo, versionOptions])
+
+  const activeVersionTransitions = useMemo(() => {
+    if (viewMode === 'single') {
+      return selectedVersion ? new Set([selectedVersion]) : null
+    }
+    if (compareError) return new Set()
+    if (!compareTransitionList) return null
+    return new Set(compareTransitionList)
+  }, [viewMode, selectedVersion, compareError, compareTransitionList])
+
+  const compareRange = useMemo(() => {
+    if (viewMode !== 'compare' || compareError || !compareFrom || !compareTo) return null
+    return {
+      from: compareFrom,
+      to: compareTo,
+      transitions: compareTransitionList?.length || 0,
+    }
+  }, [viewMode, compareError, compareFrom, compareTo, compareTransitionList])
+
+  // Build set of subclasses that have records in the active transition scope
+  const versionFilteredSubs = useMemo(() => {
+    if (!data || !activeVersionTransitions) return null
+    const subs = new Set()
+    Object.entries(data.subclass_index).forEach(([sub, entry]) => {
+      const hasDonated = (entry.donated || []).some(r => activeVersionTransitions.has(r.version))
+      const hasReceived = (entry.received || []).some(r => activeVersionTransitions.has(r.version))
+      if (hasDonated || hasReceived) subs.add(sub)
+    })
+    return subs
+  }, [data, activeVersionTransitions])
 
   useEffect(() => {
     if (!data || !groupIndex || input.length < 1) {
@@ -691,15 +804,27 @@ function AppInner() {
   }, [])
 
   // Sync URL with search state
-  function pushUrl(code, ver) {
+  function pushUrl(code, ver = selectedVersion, mode = viewMode, from = compareFrom, to = compareTo) {
     if (skipPushRef.current) { skipPushRef.current = false; return }
     const base = window.location.pathname
     const params = new URLSearchParams()
     if (code) params.set('ipc', code)
-    if (ver) params.set('ver', ver)
+    if (mode === 'compare') {
+      params.set('mode', 'compare')
+      if (from) params.set('from', from)
+      if (to) params.set('to', to)
+    } else if (ver) {
+      params.set('ver', ver)
+    }
     const qs = params.toString()
     const url = qs ? `${base}?${qs}` : base
-    window.history.pushState({ ipc: code, ver: ver || '' }, '', url)
+    window.history.pushState({
+      ipc: code,
+      ver: ver || '',
+      mode,
+      from: from || '',
+      to: to || '',
+    }, '', url)
   }
 
   // Listen for browser back/forward
@@ -707,14 +832,26 @@ function AppInner() {
     function onPopState(e) {
       const ipc = e.state?.ipc || getIpcFromUrl()
       const ver = e.state?.ver || getVerFromUrl()
+      const mode = e.state?.mode || getModeFromUrl()
+      const from = e.state?.from || getFromFromUrl()
+      const to = e.state?.to || getToFromUrl()
       skipPushRef.current = true
       setQuery(ipc)
       setInput(ipc)
       setSelectedVersion(ver)
+      setViewMode(mode)
+      setCompareFrom(from)
+      setCompareTo(to)
       setShowSugg(false)
     }
     window.addEventListener('popstate', onPopState)
-    window.history.replaceState({ ipc: initialIpc, ver: initialVer }, '', window.location.href)
+    window.history.replaceState({
+      ipc: initialIpc,
+      ver: initialVer,
+      mode: initialMode,
+      from: initialFrom,
+      to: initialTo,
+    }, '', window.location.href)
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
@@ -726,7 +863,7 @@ function AppInner() {
     setQuery(v)
     setInput(v)
     setShowSugg(false)
-    pushUrl(v, selectedVersion)
+    pushUrl(v)
     // Scroll to results after a short delay for rendering
     setTimeout(() => {
       const card = document.querySelector('.subclass-card, .prefix-results')
@@ -743,7 +880,7 @@ function AppInner() {
     setInput(code)
     setQuery(code)
     setShowSugg(false)
-    pushUrl(code, selectedVersion)
+    pushUrl(code)
   }
 
   // Compute result
@@ -799,9 +936,12 @@ function AppInner() {
           }
         }
         if (!result) {
-          const matches = Object.keys(groupIndex)
+          let matches = Object.keys(groupIndex)
             .filter(k => k.startsWith(normalized))
             .sort()
+          if (versionFilteredSubs) {
+            matches = matches.filter(k => versionFilteredSubs.has(k.slice(0, 4)))
+          }
           result = { type: 'group-prefix', prefix: normalized, matches }
         }
       }
@@ -843,6 +983,22 @@ function AppInner() {
 
       <main className="app-main">
         <div className="search-box">
+          <div className="search-mode-switch" role="tablist" aria-label="查詢模式">
+            <button
+              type="button"
+              className={`mode-switch-btn ${viewMode === 'single' ? 'active' : ''}`}
+              onClick={() => setViewMode('single')}
+            >
+              單一版本
+            </button>
+            <button
+              type="button"
+              className={`mode-switch-btn ${viewMode === 'compare' ? 'active' : ''}`}
+              onClick={() => setViewMode('compare')}
+            >
+              兩版本比較
+            </button>
+          </div>
           <div className="search-input-wrap">
             <input
               ref={inputRef}
@@ -857,12 +1013,14 @@ function AppInner() {
               spellCheck={false}
               aria-label="搜尋 IPC 分類代碼"
             />
-            <select className="version-select" value={selectedVersion} onChange={e => setSelectedVersion(e.target.value)} aria-label="選擇 IPC 版本">
-              <option value="">全部版本</option>
-              {versionOptions.map(v => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
+            {viewMode === 'single' && (
+              <select className="version-select" value={selectedVersion} onChange={e => setSelectedVersion(e.target.value)} aria-label="選擇 IPC 版本">
+                <option value="">全部版本</option>
+                {versionOptions.map(v => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+            )}
             <button className="search-btn" onClick={() => handleSearch()} disabled={loading} aria-label="搜尋">
               搜尋
             </button>
@@ -879,6 +1037,36 @@ function AppInner() {
               </ul>
             )}
           </div>
+          {viewMode === 'single' ? (
+            <div className="filter-helper">
+              可鎖定單一版本轉換，例如只查看 <code>2006.01→2010.01</code> 的異動。
+            </div>
+          ) : (
+            <div className="compare-toolbar">
+              <label className="compare-field">
+                <span>起點版</span>
+                <select className="version-select compare-select" value={compareFrom} onChange={e => setCompareFrom(e.target.value)} aria-label="選擇起點版本">
+                  {editionOptions.map(v => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="compare-arrow">→</div>
+              <label className="compare-field">
+                <span>終點版</span>
+                <select className="version-select compare-select" value={compareTo} onChange={e => setCompareTo(e.target.value)} aria-label="選擇終點版本">
+                  {editionOptions.map(v => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="compare-helper">
+                {compareError
+                  ? compareError
+                  : `會彙整區間內 ${compareRange?.transitions || 0} 次相鄰版本轉換。`}
+              </div>
+            </div>
+          )}
         </div>
 
         <TechClassifier onSearch={handleSearch} />
@@ -893,6 +1081,15 @@ function AppInner() {
         </div>
 
         <div className="result-area">
+          {!loading && !error && compareRange && (
+            <div className="compare-banner">
+              <div className="compare-banner-title">兩版本比較模式</div>
+              <div className="compare-banner-meta">
+                <span>{compareRange.from} → {compareRange.to}</span>
+                <span>涵蓋 {compareRange.transitions} 次版本轉換</span>
+              </div>
+            </div>
+          )}
           {loading && <div className="loading">載入資料中…</div>}
           {error && <div className="error-msg">資料載入失敗：{error}</div>}
           {!loading && !error && !query && (
@@ -900,18 +1097,18 @@ function AppInner() {
               <div className="empty-icon">🔍</div>
               <p>輸入 IPC 分類代碼或組號（如 <code>H01L</code>、<code>H01L 21/677</code>）查詢其版本異動與對照線索</p>
               <p className="empty-sub">
-                支援分類代碼（如 <code>H01L</code>）、組號（如 <code>H01L 21/677</code>）或前綴搜尋（如 <code>H01</code>、<code>H01L 21</code>）
+                支援分類代碼（如 <code>H01L</code>）、組號（如 <code>H01L 21/677</code>）或前綴搜尋（如 <code>H01</code>、<code>H01L 21</code>），也可切換到兩版本比較模式查看區間變化
               </p>
             </div>
           )}
           {!loading && !error && result && result.type === 'exact' && (
-            <SubclassCard code={result.code} data={data} onSearch={handleSearch} ipcGroups={ipcGroups} flowGraph={flowGraph} selectedVersion={selectedVersion} />
+            <SubclassCard code={result.code} data={data} onSearch={handleSearch} ipcGroups={ipcGroups} flowGraph={flowGraph} activeVersionTransitions={activeVersionTransitions} compareRange={compareRange} />
           )}
           {!loading && !error && result && result.type === 'prefix' && (
-            <PrefixList prefix={result.prefix} data={data} onSearch={handleSearch} selectedVersion={selectedVersion} />
+            <PrefixList prefix={result.prefix} data={data} onSearch={handleSearch} activeVersionTransitions={activeVersionTransitions} />
           )}
           {!loading && !error && result && result.type === 'group-exact' && (
-            <GroupCard code={result.code} groupIndex={groupIndex} onSearch={handleSearch} ipcGroups={ipcGroups} />
+            <GroupCard code={result.code} groupIndex={groupIndex} onSearch={handleSearch} ipcGroups={ipcGroups} activeVersionTransitions={activeVersionTransitions} compareRange={compareRange} />
           )}
           {!loading && !error && result && result.type === 'group-prefix' && (
             <GroupList
