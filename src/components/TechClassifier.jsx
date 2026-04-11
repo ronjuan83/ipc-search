@@ -327,13 +327,13 @@ export function TechClassifier({ onSearch }) {
   return (
     <div className="tech-classifier">
       <div className="tech-classifier-header">
-        技術特徵重分類
-        {isAbstract && <span className="tech-abstract-badge">摘要分析模式</span>}
+        技術詞反查 IPC（輔助）
+        {isAbstract && <span className="tech-abstract-badge">英文摘要模式</span>}
       </div>
       <div className="tech-classifier-body">
         <textarea
           className="tech-input tech-textarea"
-          placeholder="輸入中文關鍵字（如：太陽能電池）或貼入英文摘要進行 AI 分類..."
+          placeholder="輸入中文技術詞（如：太陽能電池）或貼入英文摘要，輔助定位相關 IPC 分類..."
           value={techInput}
           onChange={e => setTechInput(e.target.value)}
           autoComplete="off"
@@ -353,9 +353,9 @@ export function TechClassifier({ onSearch }) {
         )}
         {showIpccat && (
           <div className="tech-ipccat-section">
-            <div className="tech-result-label">WIPO IPCCAT AI 預測</div>
+            <div className="tech-result-label">WIPO IPCCAT 輔助建議</div>
             {ipccatLoading ? (
-              <div className="tech-ipccat-loading">正在查詢 WIPO IPCCAT...</div>
+              <div className="tech-ipccat-loading">正在查詢 WIPO IPCCAT 建議...</div>
             ) : ipccatResults.length > 0 ? (
               <div className="tech-suggestions">
                 {ipccatResults.map((code, i) => {
@@ -370,13 +370,13 @@ export function TechClassifier({ onSearch }) {
                 })}
               </div>
             ) : (
-              <div className="tech-ipccat-loading">貼入超過 50 字的英文摘要後自動查詢 WIPO AI 分類</div>
+              <div className="tech-ipccat-loading">貼入超過 50 字的英文摘要後，可自動查詢 WIPO IPCCAT 建議</div>
             )}
           </div>
         )}
         {isAbstract && hasChinese && (
           <div className="tech-zh-warning">
-            ⚠️ WIPO IPCCAT 中文準確率偏低，建議貼入英文摘要以取得精確的 IPC 五階分類
+            ⚠️ WIPO IPCCAT 對中文輸入的準確率較低，建議貼入英文摘要以取得較穩定的 IPC 五階建議
           </div>
         )}
       </div>

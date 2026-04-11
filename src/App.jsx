@@ -825,8 +825,8 @@ function AppInner() {
     <>
     <nav className="site-nav">
       <div className="site-nav-inner">
-        <span className="site-nav-brand">IPC 工具</span>
-        <a href={import.meta.env.BASE_URL} className="site-nav-link active">歷史查詢</a>
+        <span className="site-nav-brand">IPC 對照工具</span>
+        <a href={import.meta.env.BASE_URL} className="site-nav-link active">版本查詢</a>
         <a href={`${import.meta.env.BASE_URL}reclassify.html`} className="site-nav-link">批次重分類</a>
         <a href={`${import.meta.env.BASE_URL}reclassify-class.html`} className="site-nav-link">重分類二階</a>
         <a href={`${import.meta.env.BASE_URL}reclassify-subclass.html`} className="site-nav-link">重分類三階</a>
@@ -835,9 +835,9 @@ function AppInner() {
     </nav>
     <div className="app">
       <header className="app-header">
-        <h1 className="app-title">IPC 分類代碼歷史查詢</h1>
+        <h1 className="app-title">IPC 版本異動與對照查詢</h1>
         <p className="app-subtitle">
-          查詢國際專利分類（IPC）各版本之跨分類異動記錄，涵蓋 1994–2026 年共 24 個版本
+          查詢國際專利分類（IPC）在不同版本間的沿革、移轉與重分類線索，涵蓋 1994–2026 年共 24 個版本
         </p>
       </header>
 
@@ -848,7 +848,7 @@ function AppInner() {
               ref={inputRef}
               className="search-input"
               type="text"
-              placeholder="輸入 IPC 代碼，例如 H01L、H01L 21 或 H01L 21/677"
+              placeholder="輸入 IPC 代碼或組號，例如 H01L、H01L 21 或 H01L 21/677"
               value={input}
               onChange={e => { setInput(e.target.value); setShowSugg(true) }}
               onKeyDown={handleKeyDown}
@@ -898,7 +898,7 @@ function AppInner() {
           {!loading && !error && !query && (
             <div className="empty-state">
               <div className="empty-icon">🔍</div>
-              <p>輸入 IPC 分類代碼（如 <code>H01L</code>）查詢其歷史異動記錄</p>
+              <p>輸入 IPC 分類代碼或組號（如 <code>H01L</code>、<code>H01L 21/677</code>）查詢其版本異動與對照線索</p>
               <p className="empty-sub">
                 支援分類代碼（如 <code>H01L</code>）、組號（如 <code>H01L 21/677</code>）或前綴搜尋（如 <code>H01</code>、<code>H01L 21</code>）
               </p>
@@ -925,7 +925,7 @@ function AppInner() {
       </main>
 
       <footer className="app-footer">
-        資料來源：WIPO IPC 調和表（IPC v6 → 2026.01）｜ 更新日期：2026-04-06
+        資料來源：WIPO IPC 調和表（IPC v6 → 2026.01）與本地整理索引｜ 更新日期：2026-04-06
       </footer>
     </div>
     </>
